@@ -11,20 +11,23 @@ const SIZES = { sm: 32, md: 40, lg: 52 }
 const RADII = { sm: 8,  md: 11, lg: 14 }
 
 export default function CompanyLogo({ symbol, size = 'md' }) {
-  const { domain } = getCompany(symbol)
+  const { domain, logoUrl } = getCompany(symbol)
   const [srcIdx, setSrcIdx] = useState(0)
 
   const px = SIZES[size] ?? SIZES.md
   const r  = RADII[size] ?? RADII.md
 
-  // 1st: Clearbit full logo  2nd: Google S2 favicon (pulled live from company site)
-  const sources = domain ? [
-    `https://logo.clearbit.com/${domain}?size=${px * 2}`,
-    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
-  ] : []
+  // Priority: 1st direct logoUrl, 2nd Clearbit, 3rd Google S2 favicon
+  const sources = [
+    ...(logoUrl ? [logoUrl] : []),
+    ...(domain ? [
+      `https://logo.clearbit.com/${domain}?size=${px * 2}`,
+      `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+    ] : []),
+  ]
 
   if (sources.length > 0 && srcIdx < sources.length) {
-    const isFavicon = srcIdx === 1
+    const isFavicon = domain && srcIdx === sources.length - 1
     return (
       <img
         src={sources[srcIdx]}

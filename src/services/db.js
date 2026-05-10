@@ -14,3 +14,21 @@ db.version(2).stores({
   syncMeta: 'key, value',
   users: '++id, &email, name, passcode, avatar, provider'
 })
+
+// version 3: daily price snapshots for portfolio value chart
+db.version(3).stores({
+  trades: '++id, emailId, symbol, orderType, quantity, grossConsideration, processingFee, netConsideration, pricePerShare, settlementDate, executionDate, status',
+  prices: 'symbol, price, change, changePercent, updatedAt',
+  syncMeta: 'key, value',
+  users: '++id, &email, name, passcode, avatar, provider',
+  priceSnapshots: 'date', // PK = 'YYYY-MM-DD', upserted daily
+})
+
+// version 4: orderNumber index for screenshot import dedup
+db.version(4).stores({
+  trades: '++id, emailId, orderNumber, symbol, orderType, quantity, grossConsideration, processingFee, netConsideration, pricePerShare, settlementDate, executionDate, status',
+  prices: 'symbol, price, change, changePercent, updatedAt',
+  syncMeta: 'key, value',
+  users: '++id, &email, name, passcode, avatar, provider',
+  priceSnapshots: 'date',
+})

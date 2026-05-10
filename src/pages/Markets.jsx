@@ -24,42 +24,45 @@ export default function Markets({ prices }) {
         </div>
       </div>
 
-      {/* GSE Composite Index card */}
-      <div style={{
-        margin: '0 12px 14px',
-        background: '#131820',
-        border: '0.5px solid #C8A84B',
-        borderRadius: 12,
-        padding: '13px 15px',
-      }}>
-        <div style={{ fontSize: 10, color: '#556', letterSpacing: '0.05em', marginBottom: 2 }}>GSE Composite Index</div>
-        <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: '#f0f0f0' }}>
-          {loading ? '—' : '3,418.72'}
-        </div>
-        <div style={{ fontSize: 11, color: '#2ecc71', marginTop: 2 }}>▲ +24.86 · +0.73% today</div>
-        {updatedAt && (
-          <div style={{ fontSize: 10, color: '#445', marginTop: 5 }}>
-            Updated {updatedAt.toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}
+      {/* GSE Composite Index — hero glass card */}
+      <div style={{ margin: '0 16px 14px', position: 'relative' }}>
+        <div className="card" style={{ padding: '13px 15px' }}>
+          {/* Gold ambient blob */}
+          <div style={{
+            position: 'absolute', top: 0, right: 0, width: 200, height: 150, pointerEvents: 'none',
+            background: 'radial-gradient(circle, rgba(240,194,94,0.12) 0%, transparent 65%)',
+          }} />
+          <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>
+            GSE Composite Index
           </div>
-        )}
+          <div className="mono" style={{ fontSize: 28, fontWeight: 500, color: 'var(--text)', letterSpacing: '-1px' }}>
+            {loading ? '—' : '3,418.72'}
+          </div>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--green)', marginTop: 4 }}>▲ +24.86 · +0.73% today</div>
+          {updatedAt && (
+            <div className="mono" style={{ fontSize: 10, color: 'var(--dim)', marginTop: 6 }}>
+              Updated {updatedAt.toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Section label */}
-      <div style={{ fontSize: 10, color: '#556', letterSpacing: '0.06em', padding: '0 20px 8px' }}>
-        ALL LISTED EQUITIES · {loading ? '…' : stocks.length}
+      <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0 20px 8px' }}>
+        All listed equities · {loading ? '…' : stocks.length}
       </div>
 
       {/* Stock list */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 48, color: '#445', fontSize: 13 }}>
+        <div style={{ textAlign: 'center', padding: 48, color: 'var(--dim)', fontSize: 13 }}>
           Fetching live prices…
         </div>
       ) : stocks.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 48, color: '#445', fontSize: 13, lineHeight: 1.8 }}>
+        <div style={{ textAlign: 'center', padding: 48, color: 'var(--dim)', fontSize: 13, lineHeight: 1.8 }}>
           No price data available.<br />
           <button
             onClick={refresh}
-            style={{ color: '#C8A84B', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Syne', fontSize: 13, marginTop: 8 }}
+            style={{ color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-ui)', fontSize: 13, marginTop: 8 }}
           >
             Tap to retry →
           </button>
@@ -68,7 +71,7 @@ export default function Markets({ prices }) {
         stocks.map(([symbol, info]) => {
           const up    = info.change > 0
           const flat  = info.change === 0
-          const clr   = flat ? '#556' : up ? '#2ecc71' : '#e74c3c'
+          const clr   = flat ? 'var(--dim)' : up ? 'var(--green)' : 'var(--red)'
           const arrow = flat ? '—' : up ? '▲' : '▼'
           const sign  = up ? '+' : ''
           const { name } = getCompany(symbol)
@@ -79,32 +82,32 @@ export default function Markets({ prices }) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 12,
                 padding: '10px 16px',
-                borderBottom: '0.5px solid #1a2030',
+                borderBottom: '1px solid var(--divider)',
               }}
             >
               <CompanyLogo symbol={symbol} size="md" />
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontSize: 13, fontWeight: 600, color: '#e8e8e8',
+                  fontSize: 13, fontWeight: 600, color: 'var(--text)',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}>
                   {name || info.name || symbol}
                 </div>
-                <div style={{ fontSize: 10, color: '#C8A84B', marginTop: 2, letterSpacing: '0.04em' }}>
+                <div className="mono" style={{ fontSize: 10, color: 'var(--gold)', marginTop: 2, letterSpacing: '0.04em' }}>
                   {symbol}
                 </div>
               </div>
 
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: '#f0f0f0' }}>
+                <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>
                   GHS {fmtPrice(info.price)}
                 </div>
-                <div style={{ fontSize: 11, color: clr, marginTop: 2 }}>
+                <div className="mono" style={{ fontSize: 11, color: clr, marginTop: 2, whiteSpace: 'nowrap' }}>
                   {arrow} {sign}{fmtPrice(Math.abs(info.change))} ({sign}{Math.abs(info.changePercent).toFixed(2)}%)
                 </div>
                 {info.volume > 0 && (
-                  <div style={{ fontSize: 10, color: '#445', marginTop: 2 }}>
+                  <div className="mono" style={{ fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>
                     Vol {fmtVol(info.volume)}
                   </div>
                 )}

@@ -12,7 +12,8 @@ export async function syncTrades(accessToken, onProgress, { forceFullScan = fals
 
   if (forceFullScan) {
     await db.syncMeta.delete('lastSyncDate')
-    await db.trades.clear()
+    // Only remove Gmail-sourced trades so manual and paste entries are preserved
+    await db.trades.filter(t => t.source === 'gmail').delete()
   }
 
   onProgress?.({ step: 'Connecting to Gmail', count: null })

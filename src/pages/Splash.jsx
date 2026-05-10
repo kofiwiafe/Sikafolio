@@ -15,35 +15,35 @@ const GoogleG = () => (
 const Field = ({ label, hint, right, children }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <label style={{ fontSize: 11, color: '#778', fontWeight: 600, letterSpacing: '0.06em' }}>
+      <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, letterSpacing: '0.06em' }}>
         {label.toUpperCase()}
       </label>
       {right}
     </div>
     {children}
-    {hint && <span style={{ fontSize: 10, color: '#445', marginTop: -2 }}>{hint}</span>}
+    {hint && <span style={{ fontSize: 10, color: 'var(--dim)', marginTop: -2 }}>{hint}</span>}
   </div>
 )
 
 const SectionDivider = ({ label }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 0' }}>
-    <div style={{ flex: 1, height: 1, background: '#1e2530' }} />
-    <span style={{ fontSize: 10, color: '#334', whiteSpace: 'nowrap' }}>{label}</span>
-    <div style={{ flex: 1, height: 1, background: '#1e2530' }} />
+    <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+    <span style={{ fontSize: 10, color: 'var(--dim)', whiteSpace: 'nowrap' }}>{label}</span>
+    <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
   </div>
 )
 
 export default function Splash({ onEnter }) {
-  const [mode, setMode] = useState('login-id')
-  const [username, setUsername] = useState('')
-  const [foundUser, setFoundUser] = useState(null)
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [passcode, setPasscode] = useState('')
+  const [mode, setMode]               = useState('login-id')
+  const [username, setUsername]       = useState('')
+  const [foundUser, setFoundUser]     = useState(null)
+  const [firstName, setFirstName]     = useState('')
+  const [lastName, setLastName]       = useState('')
+  const [passcode, setPasscode]       = useState('')
   const [confirmPasscode, setConfirmPasscode] = useState('')
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [usernameStatus, setUsernameStatus] = useState('idle') // idle|checking|taken|available
+  const [error, setError]             = useState(null)
+  const [loading, setLoading]         = useState(false)
+  const [usernameStatus, setUsernameStatus] = useState('idle')
 
   useEffect(() => {
     if (mode !== 'signup') return
@@ -147,9 +147,9 @@ export default function Splash({ onEnter }) {
   }
 
   const usernameIndicator = () => {
-    if (usernameStatus === 'checking')  return <span style={{ fontSize: 10, color: '#778' }}>Checking…</span>
-    if (usernameStatus === 'taken')     return <span style={{ fontSize: 10, color: '#e74c3c' }}>✕ Taken</span>
-    if (usernameStatus === 'available') return <span style={{ fontSize: 10, color: '#2ecc71' }}>✓ Available</span>
+    if (usernameStatus === 'checking')  return <span style={{ fontSize: 10, color: 'var(--muted)' }}>Checking…</span>
+    if (usernameStatus === 'taken')     return <span style={{ fontSize: 10, color: 'var(--red)' }}>✕ Taken</span>
+    if (usernameStatus === 'available') return <span style={{ fontSize: 10, color: 'var(--green)' }}>✓ Available</span>
     return null
   }
 
@@ -160,7 +160,7 @@ export default function Splash({ onEnter }) {
       <p style={tagline}>Track every share. The right way.</p>
 
       <div style={card}>
-        <p style={{ fontSize: 12, color: '#556', margin: '0 0 4px', textAlign: 'center' }}>
+        <p style={{ fontSize: 12, color: 'var(--dim)', margin: '0 0 4px', textAlign: 'center' }}>
           Sign in to continue
         </p>
 
@@ -174,13 +174,13 @@ export default function Splash({ onEnter }) {
           style={inp}
         />
 
-        {error && <div style={err}>{error}</div>}
+        {error && <div style={errStyle}>{error}</div>}
 
         <button onClick={handleContinue} disabled={loading} style={{ ...btn, opacity: loading ? 0.7 : 1 }}>
           {loading ? 'Checking…' : 'Continue →'}
         </button>
 
-        <div style={{ textAlign: 'center', fontSize: 12, color: '#445' }}>
+        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--dim)' }}>
           No account?{' '}
           <span onClick={() => { resetSignup(); setMode('signup') }} style={lnk}>Sign up</span>
         </div>
@@ -201,17 +201,17 @@ export default function Splash({ onEnter }) {
       <Logo size="lg" />
 
       <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '2px 0 12px', borderBottom: '0.5px solid #1e2530' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '2px 0 12px', borderBottom: '1px solid var(--border)' }}>
           <div style={{
-            width: 38, height: 38, borderRadius: '50%', background: '#C8A84B', flexShrink: 0,
+            width: 38, height: 38, borderRadius: '50%', background: 'var(--gold)', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 15, fontWeight: 700, color: '#0d1117',
+            fontSize: 15, fontWeight: 700, color: 'var(--bg)',
           }}>
             {(foundUser?.name || 'U').charAt(0).toUpperCase()}
           </div>
           <div>
-            <div style={{ fontSize: 13, color: '#e0e0e0', fontWeight: 500 }}>{foundUser?.name}</div>
-            <div style={{ fontSize: 11, color: '#556' }}>{foundUser?.email}</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{foundUser?.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--dim)' }}>{foundUser?.email}</div>
           </div>
           <span
             onClick={() => { setMode('login-id'); setFoundUser(null); setPasscode(''); setError(null) }}
@@ -231,7 +231,7 @@ export default function Splash({ onEnter }) {
           style={inp}
         />
 
-        {error && <div style={err}>{error}</div>}
+        {error && <div style={errStyle}>{error}</div>}
 
         <button onClick={handleSignIn} disabled={loading} style={{ ...btn, opacity: loading ? 0.7 : 1 }}>
           {loading ? 'Signing in…' : 'Sign in'}
@@ -247,8 +247,7 @@ export default function Splash({ onEnter }) {
       <p style={tagline}>Create your account</p>
 
       <div style={{ ...card, gap: 0 }}>
-
-        {/* ── Path A: Google ── */}
+        {/* Path A: Google */}
         <div style={{ padding: '4px 0 16px' }}>
           <button onClick={() => googleLogin()} disabled={loading} style={{ ...googleBtn, opacity: loading ? 0.7 : 1 }}>
             <GoogleG />
@@ -258,7 +257,7 @@ export default function Splash({ onEnter }) {
 
         <SectionDivider label="or create a username account" />
 
-        {/* ── Path B: Manual ── */}
+        {/* Path B: Manual */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 16 }}>
           <div style={{ display: 'flex', gap: 10 }}>
             <Field label="First name">
@@ -291,9 +290,9 @@ export default function Splash({ onEnter }) {
               autoCapitalize="none"
               style={{
                 ...inp,
-                borderColor: usernameStatus === 'taken' ? 'rgba(231,76,60,0.5)'
-                  : usernameStatus === 'available' ? 'rgba(46,204,113,0.4)'
-                  : '#1e2530',
+                borderColor: usernameStatus === 'taken'     ? 'rgba(255,142,138,0.5)'
+                           : usernameStatus === 'available' ? 'rgba(91,227,140,0.4)'
+                           : 'var(--border)',
               }}
             />
           </Field>
@@ -317,16 +316,14 @@ export default function Splash({ onEnter }) {
               onKeyDown={e => e.key === 'Enter' && handleSignUp()}
               style={{
                 ...inp,
-                borderColor: confirmPasscode && passcode !== confirmPasscode
-                  ? 'rgba(231,76,60,0.5)'
-                  : confirmPasscode && passcode === confirmPasscode
-                  ? 'rgba(46,204,113,0.4)'
-                  : '#1e2530',
+                borderColor: confirmPasscode && passcode !== confirmPasscode ? 'rgba(255,142,138,0.5)'
+                           : confirmPasscode && passcode === confirmPasscode  ? 'rgba(91,227,140,0.4)'
+                           : 'var(--border)',
               }}
             />
           </Field>
 
-          {error && <div style={err}>{error}</div>}
+          {error && <div style={errStyle}>{error}</div>}
 
           <button
             onClick={handleSignUp}
@@ -339,7 +336,7 @@ export default function Splash({ onEnter }) {
             {loading ? 'Creating account…' : 'Create account'}
           </button>
 
-          <div style={{ textAlign: 'center', fontSize: 12, color: '#445', paddingBottom: 4 }}>
+          <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--dim)', paddingBottom: 4 }}>
             Already have an account?{' '}
             <span onClick={() => { resetSignup(); setMode('login-id') }} style={lnk}>Sign in</span>
           </div>
@@ -350,35 +347,41 @@ export default function Splash({ onEnter }) {
 }
 
 const page = {
-  minHeight: '100vh', background: '#0d1117',
+  minHeight: '100vh',
+  background: '#080A10',
+  backgroundImage: 'radial-gradient(ellipse 600px 400px at 50% -10%, rgba(240,194,94,0.10) 0%, transparent 70%)',
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
   padding: '40px 24px',
 }
-const tagline = { fontSize: 13, color: '#556', marginTop: 10, textAlign: 'center', lineHeight: 1.6 }
+const tagline = { fontSize: 13, color: 'var(--dim)', marginTop: 10, textAlign: 'center', lineHeight: 1.6 }
 const card = {
   width: '100%', maxWidth: 340, marginTop: 28,
-  background: '#131820', border: '0.5px solid #1e2530',
+  background: 'linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%)',
+  border: '1px solid rgba(255,255,255,0.07)',
   borderRadius: 18, padding: '20px',
+  backdropFilter: 'blur(20px)',
   display: 'flex', flexDirection: 'column', gap: 10,
 }
 const inp = {
   width: '100%', padding: '12px 14px',
-  background: '#0d1117', border: '0.5px solid #1e2530', borderRadius: 10,
-  color: '#e0e0e0', fontSize: 13, fontFamily: 'Syne, sans-serif', outline: 'none',
+  background: '#080A10', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10,
+  color: '#FAFBFD', fontSize: 13, outline: 'none',
   transition: 'border-color 0.2s',
 }
 const btn = {
-  width: '100%', padding: 13, background: '#C8A84B',
+  width: '100%', padding: 13,
+  background: 'linear-gradient(180deg, #F0C25E 0%, #C99A38 100%)',
+  boxShadow: '0 4px 14px rgba(240,194,94,0.27)',
   border: 'none', borderRadius: 10,
-  fontFamily: 'Syne, sans-serif', fontSize: 14, fontWeight: 600,
-  color: '#0d1117', cursor: 'pointer',
+  fontSize: 14, fontWeight: 700,
+  color: '#080A10', cursor: 'pointer',
 }
 const googleBtn = {
   width: '100%', padding: '11px 16px', background: '#fff',
   border: '1px solid #dadce0', borderRadius: 10,
-  fontFamily: 'Syne, sans-serif', fontSize: 14, fontWeight: 600,
+  fontSize: 14, fontWeight: 600,
   color: '#1f1f1f', cursor: 'pointer',
   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
 }
-const err = { fontSize: 12, color: '#e74c3c', padding: '2px 2px' }
-const lnk = { color: '#C8A84B', cursor: 'pointer' }
+const errStyle = { fontSize: 12, color: '#FF8E8A', padding: '2px 2px' }
+const lnk = { color: '#F0C25E', cursor: 'pointer' }
