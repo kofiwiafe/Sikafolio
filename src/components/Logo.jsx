@@ -1,5 +1,6 @@
+import logoImg from '../assets/logo.jpg'
+
 export default function Logo({ size = 'md' }) {
-  const iconSize = size === 'lg' ? 36 : 16
   const boxSize  = size === 'lg' ? 72 : 30
   const textSize = size === 'lg' ? 32 : 17
 
@@ -12,8 +13,13 @@ export default function Logo({ size = 'md' }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         marginBottom: size === 'lg' ? 16 : 0,
         flexShrink: 0,
+        overflow: 'hidden',
       }}>
-        <i className="ti ti-coin" style={{ fontSize: iconSize, color: '#0d1117' }} aria-hidden="true" />
+        <img
+          src={logoImg}
+          alt="SikaFolio logo"
+          style={{ width: '80%', height: '80%', objectFit: 'contain', mixBlendMode: 'multiply' }}
+        />
       </div>
       <div style={{ fontSize: textSize, fontWeight: 700, color: '#f0f0f0', letterSpacing: '-0.02em', textAlign: 'center' }}>
         Sika<span style={{ color: '#C8A84B' }}>Folio</span>
