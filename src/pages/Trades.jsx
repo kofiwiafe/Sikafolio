@@ -137,7 +137,10 @@ export default function Trades({ accessToken, gmailEmail, syncTrigger }) {
           fontSize: 12, color: '#C8A84B', lineHeight: 1.6,
         }}>
           <i className="ti ti-info-circle" style={{ fontSize: 14, marginRight: 7 }} aria-hidden="true" />
-          Connect Gmail in <strong>Settings</strong> to auto-import your iC Securities trade confirmations.
+          {gmailEmail
+            ? <>Gmail session expired — reconnect in <strong>Settings</strong> to sync.</>
+            : <>Connect Gmail in <strong>Settings</strong> to auto-import your iC Securities trade confirmations.</>
+          }
         </div>
       )}
 

@@ -52,18 +52,19 @@ function parseGSETable(html) {
   const doc    = parser.parseFromString(html, 'text/html')
   const prices = {}
 
-  // kwayisi.org table columns: symbol | name | price | change | %change | volume
+  // kwayisi.org table columns: symbol | name | volume | price | change
   const rows = doc.querySelectorAll('table tbody tr, table tr')
   rows.forEach(row => {
     const cells = [...row.querySelectorAll('td')]
-    if (cells.length < 3) return
+    if (cells.length < 4) return
 
-    const symbol        = cells[0]?.textContent?.trim()?.toUpperCase()
-    const name          = cells[1]?.textContent?.trim() || ''
-    const price         = parseNum(cells[2]?.textContent)
-    const change        = parseNum(cells[3]?.textContent)
-    const changePercent = parseNum(cells[4]?.textContent)
-    const volume        = parseInt(String(cells[5]?.textContent || '').replace(/\D/g, '') || '0', 10)
+    const symbol = cells[0]?.textContent?.trim()?.toUpperCase()
+    const name   = cells[1]?.textContent?.trim() || ''
+    const volume = parseInt(String(cells[2]?.textContent || '').replace(/\D/g, '') || '0', 10)
+    const price  = parseNum(cells[3]?.textContent)
+    const change = parseNum(cells[4]?.textContent)
+    const prev   = price - change
+    const changePercent = prev !== 0 ? (change / prev) * 100 : 0
 
     // Only accept valid GSE tickers (2–10 uppercase letters, no digits)
     if (!/^[A-Z]{2,10}$/.test(symbol)) return
