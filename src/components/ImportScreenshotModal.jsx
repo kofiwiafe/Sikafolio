@@ -126,19 +126,34 @@ export default function ImportScreenshotModal({ onClose }) {
     if (imgSrc) URL.revokeObjectURL(imgSrc)
     setImgSrc(URL.createObjectURL(file))
 
+    let fakeP = 0
+    const timer = setInterval(() => {
+      fakeP = Math.min(fakeP + 0.012, 0.85)
+      setProgress(fakeP)
+    }, 120)
+
     try {
-      const { createWorker } = await import('tesseract.js')
-      const worker = await createWorker('eng', 1, {
-        logger: ({ status, progress: p }) => {
-          if      (status === 'loading tesseract core')        setProgress(p * 0.10)
-          else if (status === 'initializing tesseract')        setProgress(0.10 + p * 0.10)
-          else if (status === 'loading language traineddata')  setProgress(0.20 + p * 0.20)
-          else if (status === 'initializing api')              setProgress(0.40 + p * 0.10)
-          else if (status === 'recognizing text')              setProgress(0.50 + p * 0.50)
-        },
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
       })
-      const { data: { text } } = await worker.recognize(file)
-      await worker.terminate()
+
+      const res = await fetch('/api/vision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64 }),
+      })
+
+      clearInterval(timer)
+      setProgress(1)
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Vision API error')
+      }
+      const { text } = await res.json()
 
       const trades = parseTradeLiveText(text)
       if (trades.length === 0) {
@@ -152,8 +167,9 @@ export default function ImportScreenshotModal({ onClose }) {
       )
       setPreview(withDup)
       setPhase('preview')
-    } catch {
-      setError('OCR failed. Please try a clearer screenshot and try again.')
+    } catch (err) {
+      clearInterval(timer)
+      setError(`Reading failed: ${err.message}`)
       setPhase('idle')
     }
   }
@@ -267,7 +283,7 @@ export default function ImportScreenshotModal({ onClose }) {
                 style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 8, marginBottom: 18, objectFit: 'contain' }}
               />
             )}
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>Reading screenshot…</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>Analyzing with Cloud Vision…</div>
             <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 99, height: 4, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',

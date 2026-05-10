@@ -1,8 +1,51 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+function visionDevPlugin(env) {
+  return {
+    name: 'vision-api-dev',
+    configureServer(server) {
+      server.middlewares.use('/api/vision', (req, res, next) => {
+        if (req.method !== 'POST') { next(); return }
+        let body = ''
+        req.on('data', chunk => { body += chunk })
+        req.on('end', async () => {
+          try {
+            const { image } = JSON.parse(body)
+            const key = env.GOOGLE_VISION_KEY
+            if (!key) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: 'GOOGLE_VISION_KEY not set in .env' }))
+              return
+            }
+            const visionRes = await fetch(
+              `https://vision.googleapis.com/v1/images:annotate?key=${key}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  requests: [{ image: { content: image }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }] }],
+                }),
+              }
+            )
+            const data = await visionRes.json()
+            const text = data.responses?.[0]?.fullTextAnnotation?.text || ''
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ text }))
+          } catch (err) {
+            res.statusCode = 502
+            res.end(JSON.stringify({ error: err.message }))
+          }
+        })
+      })
+    },
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  return {
   server: {
     port: 5173,
     strictPort: true,
@@ -44,6 +87,8 @@ export default defineConfig({
           }
         ]
       }
-    })
+    }),
+    visionDevPlugin(env),
   ]
+  }
 })
