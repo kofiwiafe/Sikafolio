@@ -6,23 +6,31 @@ const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me'
 // ─── Main entry point ────────────────────────────────────────────────────────
 // Hybrid sync: first run fetches ALL historical emails,
 // subsequent runs only fetch emails since last sync.
-export async function syncTrades(accessToken, onProgress) {
+export async function syncTrades(accessToken, onProgress, { forceFullScan = false } = {}) {
   const lastSync = await db.syncMeta.get('lastSyncDate')
-  const isFirstRun = !lastSync
+  const isFirstRun = !lastSync || forceFullScan
 
-  onProgress?.({ step: 'Connecting to Gmail…', count: null })
+  if (forceFullScan) {
+    await db.syncMeta.delete('lastSyncDate')
+    await db.trades.clear()
+  }
 
+  onProgress?.({ step: 'Connecting to Gmail', count: null })
+
+  // in:anywhere catches spam/trash where iC emails sometimes land
+  const baseQuery = `from:${SENDER} subject:"Trade Notification" in:anywhere`
   const query = isFirstRun
-    ? `from:${SENDER} subject:"TRADE CONFIRMATION"`
-    : `from:${SENDER} subject:"TRADE CONFIRMATION" after:${Math.floor(new Date(lastSync.value).getTime() / 1000)}`
+    ? baseQuery
+    : `${baseQuery} after:${Math.floor(new Date(lastSync.value).getTime() / 1000)}`
+
+  onProgress?.({ step: 'Scanning inbox', query, count: null })
 
   const messages = await listMessages(accessToken, query)
-  onProgress?.({ step: `Found ${messages.length} confirmation emails`, count: messages.length })
 
   const existingIds = new Set((await db.trades.toArray()).map(t => t.emailId))
   const newMessages = messages.filter(m => !existingIds.has(m.id))
 
-  onProgress?.({ step: `Parsing ${newMessages.length} new trades…`, count: newMessages.length })
+  onProgress?.({ step: 'Parsing confirmations', count: messages.length })
 
   let parsed = 0
   for (const msg of newMessages) {
@@ -32,12 +40,12 @@ export async function syncTrades(accessToken, onProgress) {
       await db.trades.add({ ...trade, emailId: msg.id, source: 'gmail' })
       parsed++
     }
-    onProgress?.({ step: `Parsed ${parsed} of ${newMessages.length} trades`, count: parsed })
+    onProgress?.({ step: 'Parsing confirmations', count: messages.length, parsed })
   }
 
-  // Save sync timestamp
+  // Only save lastSyncDate if we actually completed a successful scan
   await db.syncMeta.put({ key: 'lastSyncDate', value: new Date().toISOString() })
-  onProgress?.({ step: 'Sync complete', count: parsed, done: true })
+  onProgress?.({ step: 'Sync complete', emailCount: messages.length, tradeCount: parsed, done: true })
 
   return parsed
 }
@@ -52,9 +60,12 @@ async function listMessages(token, query, pageToken = null, results = []) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   const data = await res.json()
 
+  if (data.error) {
+    throw new Error(data.error.message || `Gmail API error ${res.status}`)
+  }
+
   results.push(...(data.messages || []))
 
-  // Paginate automatically through all results
   if (data.nextPageToken) {
     return listMessages(token, query, data.nextPageToken, results)
   }
@@ -65,7 +76,9 @@ async function fetchMessage(token, id) {
   const res = await fetch(`${BASE}/messages/${id}?format=full`, {
     headers: { Authorization: `Bearer ${token}` }
   })
-  return res.json()
+  const data = await res.json()
+  if (data.error) throw new Error(data.error.message || `Gmail API error ${res.status}`)
+  return data
 }
 
 // ─── Email parser ─────────────────────────────────────────────────────────────
@@ -81,15 +94,17 @@ export function parseTradeEmail(emailData) {
   const body = extractBody(emailData)
   if (!body) return null
 
+  // Stop at next known field label so HTML-collapsed emails parse correctly
+  const STOP = '(?=\\s*(?:Order|Equity|Share|Gross|Processing|Net|Settlement|Account|Dear|Thank|$))'
   const get = (label) => {
-    const match = body.match(new RegExp(label + '[:\\s]+([^\\n<\\r]+)', 'i'))
+    const match = body.match(new RegExp(label + '[:\\s]+([^\\n]{1,100}?)' + STOP, 'i'))
     return match ? match[1].trim() : null
   }
 
   const rawSymbol = get('Equity')
+  // Strip "GSE." or "GSE " prefix — iC uses both formats e.g. "GSE.SIC" and "GSE MTNGH"
   const symbol = rawSymbol
-    ?.replace(/GSE\s*/i, '')
-    ?.replace(/MTNGH/i, 'MTNGH')
+    ?.replace(/GSE[.\s]+/i, '')
     ?.trim()
     ?.toUpperCase()
 
@@ -123,11 +138,19 @@ function extractBody(emailData) {
       return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))
     }
   }
-  // Fallback to HTML part
+  // Fallback: convert HTML to line-delimited text so field regexes work correctly
   for (const part of parts) {
     if (part.mimeType === 'text/html' && part.body?.data) {
       const html = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))
-      return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+      return html
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/?(p|div|tr|td|li)[^>]*>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\n{3,}/g, '\n\n')
     }
   }
   return null
@@ -147,8 +170,9 @@ function flattenParts(payload) {
 export function parseTradeText(rawText) {
   const body = rawText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
 
+  const STOP = '(?=\\s*(?:Order|Equity|Share|Gross|Processing|Net|Settlement|Account|Dear|Thank|$))'
   const get = (label) => {
-    const match = body.match(new RegExp(label + '[:\\s]+([^\\n<\\r]+)', 'i'))
+    const match = body.match(new RegExp(label + '[:\\s]+([^\\n]{1,100}?)' + STOP, 'i'))
     return match ? match[1].trim() : null
   }
 

@@ -24,6 +24,14 @@
 
   * { box-sizing: border-box; }
 
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px #0d1117 inset;
+    -webkit-text-fill-color: #e0e0e0;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
   html, body, #root {
     height: 100%;
     margin: 0;

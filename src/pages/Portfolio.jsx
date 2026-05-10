@@ -20,37 +20,29 @@ export default function Portfolio({ prices }) {
         </div>
       </div>
 
-      {holdings.length > 0 && (
-        <div style={{
-          margin: '0 12px 12px',
-          background: 'rgba(200,168,75,0.07)',
-          border: '0.5px solid rgba(200,168,75,0.2)',
-          borderRadius: 12, padding: '10px 13px',
-          display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 12, color: '#C8A84B',
-        }}>
-          <i className="ti ti-mail" style={{ fontSize: 14 }} aria-hidden="true" />
-          Trades auto-imported from Gmail · Go to Trades tab to sync
-        </div>
-      )}
 
       <div style={{ padding: '0 20px 14px' }}>
         <div style={{ fontSize: 11, color: '#445', letterSpacing: '0.05em', marginBottom: 4 }}>
-          Total portfolio value
+          Total {isUp ? 'gains' : 'loss'}
         </div>
-        <div className="mono" style={{ fontSize: 30, fontWeight: 500, color: '#f0f0f0', lineHeight: 1.1 }}>
-          GHS {fmt(summary?.totalValue || 0)}
+        <div className="mono" style={{ fontSize: 30, fontWeight: 500, color: isUp ? '#2ecc71' : '#e74c3c', lineHeight: 1.1 }}>
+          {isUp ? '+' : ''}GHS {fmt(summary?.totalPnL || 0)}
         </div>
         {summary && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8,
-            background: isUp ? 'rgba(46,204,113,0.1)' : 'rgba(231,76,60,0.1)',
-            border: `0.5px solid ${isUp ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.25)'}`,
-            borderRadius: 20, padding: '4px 10px', fontSize: 12,
-            color: isUp ? '#2ecc71' : '#e74c3c',
-          }}>
-            <i className={`ti ti-trending-${isUp ? 'up' : 'down'}`} style={{ fontSize: 12 }} aria-hidden="true" />
-            {isUp ? '+' : ''}GHS {fmt(summary.totalPnL)} · {isUp ? '+' : ''}{summary.totalPct.toFixed(1)}%
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: isUp ? 'rgba(46,204,113,0.1)' : 'rgba(231,76,60,0.1)',
+              border: `0.5px solid ${isUp ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.25)'}`,
+              borderRadius: 20, padding: '3px 9px', fontSize: 12,
+              color: isUp ? '#2ecc71' : '#e74c3c',
+            }}>
+              <i className={`ti ti-trending-${isUp ? 'up' : 'down'}`} style={{ fontSize: 12 }} aria-hidden="true" />
+              {isUp ? '+' : ''}{summary.totalPct.toFixed(1)}%
+            </div>
+            <div style={{ fontSize: 11, color: '#556', letterSpacing: '0.03em' }}>
+              Portfolio value: <span style={{ color: '#aaa' }}>GHS {fmt(summary.totalValue)}</span>
+            </div>
           </div>
         )}
       </div>

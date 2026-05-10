@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../services/db'
 import { syncTrades } from '../services/gmailService'
@@ -6,29 +6,35 @@ import SyncPanel from '../components/SyncPanel'
 import Logo from '../components/Logo'
 import AddTradeModal from '../components/AddTradeModal'
 
-export default function Trades({ accessToken }) {
+export default function Trades({ accessToken, gmailEmail, syncTrigger }) {
   const [syncing, setSyncing]       = useState(false)
   const [progress, setProgress]     = useState(null)
-  const [emailCount, setEmailCount] = useState(null)
-  const [tradeCount, setTradeCount] = useState(null)
+  const [syncError, setSyncError]   = useState(null)
   const [showAdd, setShowAdd]       = useState(false)
 
-  const trades = useLiveQuery(() =>
-    db.trades.orderBy('executionDate').reverse().toArray(), []
-  )
+  const trades   = useLiveQuery(() => db.trades.orderBy('executionDate').reverse().toArray(), [])
+  const syncMeta = useLiveQuery(() => db.syncMeta.get('lastSyncDate'), [])
 
-  async function handleSync() {
+  // Show rescan button whenever Gmail is connected and a prior sync exists
+  const showRescan = accessToken && syncMeta?.value && !syncing
+
+  useEffect(() => {
+    if (syncTrigger > 0 && accessToken) handleSync()
+  }, [syncTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSync({ forceFullScan = false } = {}) {
     if (!accessToken) {
       alert('Connect Gmail in Settings first.')
       return
     }
     setSyncing(true)
     setProgress(null)
-    await syncTrades(accessToken, (p) => {
-      setProgress(p)
-      if (p.count && p.step.includes('emails')) setEmailCount(p.count)
-      if (p.count && p.step.includes('trades')) setTradeCount(p.count)
-    })
+    setSyncError(null)
+    try {
+      await syncTrades(accessToken, (p) => setProgress(p), { forceFullScan })
+    } catch (err) {
+      setSyncError(err.message)
+    }
     setSyncing(false)
   }
 
@@ -83,10 +89,46 @@ export default function Trades({ accessToken }) {
       </div>
 
       {(syncing || progress) && (
-        <SyncPanel progress={progress} emailCount={emailCount} tradeCount={tradeCount} />
+        <SyncPanel progress={progress} gmailEmail={gmailEmail} />
       )}
 
-      {!syncing && !progress && !accessToken && (
+      {syncError && (
+        <div style={{
+          margin: '0 12px 12px',
+          background: 'rgba(231,76,60,0.07)',
+          border: '0.5px solid rgba(231,76,60,0.25)',
+          borderRadius: 12, padding: '11px 14px',
+          fontSize: 12, color: '#e74c3c', lineHeight: 1.6,
+        }}>
+          <i className="ti ti-alert-circle" style={{ fontSize: 14, marginRight: 7 }} aria-hidden="true" />
+          {syncError.includes('401') || syncError.includes('Invalid Credentials')
+            ? 'Gmail session expired — reconnect Gmail in Settings.'
+            : syncError}
+        </div>
+      )}
+
+      {/* Persistent rescan button: Gmail connected, prior sync on record, still no trades */}
+      {showRescan && (
+        <div style={{ margin: '0 12px 12px' }}>
+          <button
+            onClick={() => handleSync({ forceFullScan: true })}
+            style={{
+              width: '100%', padding: '11px',
+              background: 'rgba(200,168,75,0.08)',
+              border: '0.5px solid rgba(200,168,75,0.25)',
+              borderRadius: 10,
+              fontFamily: 'Syne, sans-serif', fontSize: 12,
+              color: '#C8A84B', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            <i className="ti ti-history" style={{ fontSize: 13 }} aria-hidden="true" />
+            Rescan all history
+          </button>
+        </div>
+      )}
+
+      {!syncing && !accessToken && (
         <div style={{
           margin: '0 12px 12px',
           background: 'rgba(200,168,75,0.07)',
