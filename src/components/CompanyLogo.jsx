@@ -17,8 +17,9 @@ export default function CompanyLogo({ symbol, size = 'md' }) {
   const px = SIZES[size] ?? SIZES.md
   const r  = RADII[size] ?? RADII.md
 
-  // Priority: 1st direct logoUrl, 2nd Clearbit, 3rd Google S2 favicon
+  // Priority: 1st local file, 2nd direct logoUrl, 3rd Clearbit, 4th Google S2 favicon
   const sources = [
+    `/logos/${symbol}.png`,
     ...(logoUrl ? [logoUrl] : []),
     ...(domain ? [
       `https://logo.clearbit.com/${domain}?size=${px * 2}`,

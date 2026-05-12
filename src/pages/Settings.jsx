@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../services/db'
 import Logo from '../components/Logo'
+import ConfirmCodeModal from '../components/ConfirmCodeModal'
 
 export default function Settings({ user, onLogout }) {
   const [confirmClear, setConfirmClear] = useState(false)
@@ -36,6 +37,16 @@ export default function Settings({ user, onLogout }) {
   )
 
   return (
+    <>
+    {confirmClear && (
+      <ConfirmCodeModal
+        title="Clear all portfolio data"
+        subtitle="This permanently deletes all trade records in the app. Your data on iC Wealth is not affected."
+        destructive
+        onVerified={clearAllTrades}
+        onCancel={() => setConfirmClear(false)}
+      />
+    )}
     <div style={{ paddingBottom: 24 }}>
       <div style={{ padding: '10px 20px 14px' }}>
         <Logo />
@@ -80,54 +91,19 @@ export default function Settings({ user, onLogout }) {
       {/* Data section */}
       <div style={{ padding: '14px 20px 6px', fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Data</div>
       <div style={{ padding: '4px 20px 0' }}>
-        {!confirmClear ? (
-          <button
-            onClick={() => setConfirmClear(true)}
-            style={{
-              width: '100%', padding: 12,
-              background: 'var(--red-dim)',
-              border: '1px solid var(--red-border)',
-              borderRadius: 'var(--r-md)',
-              fontFamily: 'var(--font-ui)', fontSize: 13,
-              color: 'var(--red)', cursor: 'pointer',
-            }}
-          >
-            Clear all portfolio data
-          </button>
-        ) : (
-          <div style={{
+        <button
+          onClick={() => setConfirmClear(true)}
+          style={{
+            width: '100%', padding: 12,
             background: 'var(--red-dim)',
             border: '1px solid var(--red-border)',
-            borderRadius: 'var(--r-md)', padding: '14px 16px',
-          }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, marginBottom: 12 }}>
-              This deletes all trade records in the app. Your data on iC Wealth is not affected.
-              You will need to re-enter your holdings manually.
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={clearAllTrades}
-                style={{
-                  flex: 1, padding: 10, borderRadius: 'var(--r-sm)', cursor: 'pointer',
-                  background: 'rgba(255,142,138,0.15)', border: '1px solid var(--red-border)',
-                  fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--red)',
-                }}
-              >
-                Yes, clear it
-              </button>
-              <button
-                onClick={() => setConfirmClear(false)}
-                style={{
-                  flex: 1, padding: 10, borderRadius: 'var(--r-sm)', cursor: 'pointer',
-                  background: 'transparent', border: '1px solid var(--border)',
-                  fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--dim)',
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+            borderRadius: 'var(--r-md)',
+            fontFamily: 'var(--font-ui)', fontSize: 13,
+            color: 'var(--red)', cursor: 'pointer',
+          }}
+        >
+          Clear all portfolio data
+        </button>
       </div>
 
       {/* Sign out */}
@@ -147,5 +123,6 @@ export default function Settings({ user, onLogout }) {
         </button>
       </div>
     </div>
+    </>
   )
 }

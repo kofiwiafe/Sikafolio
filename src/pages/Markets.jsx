@@ -1,11 +1,16 @@
+import { useState } from 'react'
 import Logo from '../components/Logo'
 import CompanyLogo from '../components/CompanyLogo'
+import PriceInfoSheet from '../components/PriceInfoSheet'
 import { getCompany } from '../constants/gseCompanies'
+import { isMarketOpen } from '../hooks/usePrices'
 
 function fmtPrice(n) { return Number(n).toFixed(2) }
 function fmtVol(n)   { return Number(n).toLocaleString() }
 
 export default function Markets({ prices }) {
+  const [showInfo, setShowInfo] = useState(false)
+  const marketOpen = isMarketOpen()
   const { prices: priceMap, updatedAt, loading, refresh } = prices || {}
 
   const stocks = Object.entries(priceMap || {}).sort((a, b) =>
@@ -18,9 +23,22 @@ export default function Markets({ prices }) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
         <Logo />
-        <div className="pill">
-          <span className="dot-live" />
-          Live
+        <div
+          role="button"
+          onClick={() => setShowInfo(true)}
+          className="pill"
+          style={{
+            color: marketOpen ? 'var(--green)' : 'var(--muted)',
+            cursor: 'pointer',
+            ...(marketOpen && { background: 'var(--green-dim)', borderColor: 'var(--green-border)' }),
+          }}
+        >
+          {marketOpen
+            ? <span className="dot-live" />
+            : <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--dim)', flexShrink: 0 }} />
+          }
+          <span>{marketOpen ? 'MARKET OPEN' : 'MARKET CLOSED'}</span>
+          <i className="ti ti-info-circle" style={{ fontSize: 12, marginLeft: 1 }} />
         </div>
       </div>
 
@@ -46,6 +64,8 @@ export default function Markets({ prices }) {
           )}
         </div>
       </div>
+
+      <PriceInfoSheet open={showInfo} onClose={() => setShowInfo(false)} updatedAt={updatedAt} />
 
       {/* Section label */}
       <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0 20px 8px' }}>

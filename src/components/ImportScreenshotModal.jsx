@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createWorker } from 'tesseract.js'
 import { db } from '../services/db'
 
 const IC_FEE_RATE = 0.025
@@ -13,67 +14,80 @@ function fixOcrDigits(str) {
   return str.replace(/[lI]/g, '1').replace(/[oO]/g, '0')
 }
 
+// Tesseract may use comma as decimal separator ("278,80") or drop the period entirely ("27880")
+function parseDecimal(str) {
+  const s = str.replace(/(\d),(\d{2})$/, '$1.$2').replace(/,/g, '')
+  return +s
+}
+
 function parseTradeLiveText(rawText) {
   const results = []
 
-  // Anchor on "Order number XXXXXXX".
-  // Each anchor is the START of a card's body — we search BEFORE it for the header
-  // (symbol, date) and AFTER it for the body fields (quantity, estimated value).
-  // This keeps every card's fields strictly isolated from adjacent cards.
-  const anchorRe = /order\s*number\s*[:\s]*\s*([\d\w]{6,})/gi
-  const anchors  = []
+  // Anchor on card headers: "Buy 41 MTNGH" / "Sell 30 SIC".
+  // This is the largest, boldest text in each card and far more reliably OCR'd
+  // than "Order number XXXXXXX" — which can be misread for the first card in a
+  // multi-card screenshot, causing the first trade to be silently dropped.
+  // Each anchor marks the START of a card; everything to the next anchor is one block.
+  // No leading \b — handles OCR merging tab-bar text with the first card header,
+  // e.g. "...Dividend HistoryBuy 41 MTNGH..." where \b would fail before "Buy".
+  const headerRe = /(buy|sell)\s+([\d\w]{1,8})\s+([A-Z]{2,14})\b/gi
+  const anchors = []
   let m
-  while ((m = anchorRe.exec(rawText)) !== null) {
-    const orderNumber = fixOcrDigits(m[1]).replace(/[^\d]/g, '')
-    if (orderNumber.length >= 6) {
-      anchors.push({ orderNumber, index: m.index, end: m.index + m[0].length })
-    }
+  while ((m = headerRe.exec(rawText)) !== null) {
+    const rawQty = fixOcrDigits(m[2]).replace(/[^\d]/g, '')
+    const qty = +rawQty
+    if (!qty) continue  // "Buy/Sell  Buy" body row has no numeric quantity — skip it
+
+    // Strip status badge suffix OCR may have merged onto the symbol (e.g. "MTNGHCOMPLETE")
+    const rawSym = m[3].toUpperCase()
+      .replace(/COMPLETE$|CANCEL(LED)?$|PEND(ING)?$|FAIL(ED)?$/i, '').trim()
+    if (rawSym.length < 2 || rawSym.length > 10) continue
+
+    anchors.push({ rawOrderType: m[1], headerQty: qty, symbol: rawSym, index: m.index })
   }
   if (anchors.length === 0) return results
 
   for (let k = 0; k < anchors.length; k++) {
-    const { orderNumber, index: onIndex, end: onEnd } = anchors[k]
+    const { rawOrderType, headerQty, symbol, index: aStart } = anchors[k]
 
-    // preBlock — from the previous anchor's end to this anchor's start.
-    // Contains THIS card's header: "Buy 41 MTNGH", "6th May 2026".
-    const preStart = k === 0 ? 0 : anchors[k - 1].end
-    const preBlock = rawText.slice(preStart, onIndex)
+    // Card block: from this header to the next header's start (or end of text).
+    // All fields — date, order number, quantity, estimated value — are inside this block.
+    const blockEnd = k < anchors.length - 1 ? anchors[k + 1].index : rawText.length
+    const block = rawText.slice(aStart, blockEnd)
 
-    // postBlock — from this anchor to the next anchor (or end).
-    // Contains THIS card's body: Buy/Sell, Quantity, Estimated value.
-    const postEnd   = k < anchors.length - 1 ? anchors[k + 1].index : rawText.length
-    const postBlock = rawText.slice(onIndex, postEnd)
+    // Order type: from the header word (always "Buy" or "Sell")
+    const orderType = rawOrderType[0].toUpperCase() + rawOrderType.slice(1).toLowerCase()
 
-    // Symbol: take the LAST header match in preBlock so we get the closest card header,
-    // not something from the stock price section further up the screenshot.
-    const headerMatches = [...preBlock.matchAll(/\b(buy|sell)\s+[\d\w]+\s+([A-Z]{2,10})\b/gi)]
-    const headerM = headerMatches[headerMatches.length - 1]
-    const symbol  = headerM ? headerM[2].toUpperCase() : null
-
-    // Order type: explicit "Buy/Sell  Buy" row in body is more reliable than the header
-    const bsM     = postBlock.match(/buy.{0,3}sell\s+(buy|sell)/i)
-    const rawType = bsM ? bsM[1] : (headerM ? headerM[1] : null)
-    const orderType = rawType ? rawType[0].toUpperCase() + rawType.slice(1).toLowerCase() : null
-
-    // Date: ordinal format in preBlock ("6th May 2026") — card-specific, avoids
-    // matching the "As of 10 May 2026" stock price header which has no ordinal suffix
+    // Date: first ordinal format in this block ("6th May 2026").
+    // Ordinal suffix avoids matching "As of 10 May 2026" in the page header.
     let date = null
-    const ordM = preBlock.match(/(\d{1,2})(?:st|nd|rd|th)\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i)
+    const ordM = block.match(/(\d{1,2})(?:st|nd|rd|th)\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i)
     if (ordM) {
       date = new Date(+ordM[3], MONTHS[ordM[2].toLowerCase()], +ordM[1]).toISOString().split('T')[0]
     }
 
-    // Quantity: from postBlock with OCR correction ("4l" → "41")
-    const qM  = postBlock.match(/\bquantity\s*[:\s]*\s*([\d\w]+)/i)
-    const qty = qM ? +(fixOcrDigits(qM[1]).replace(/[^\d]/g, '')) : null
+    // Order number: nice-to-have for dedup, but not required for parsing
+    const onM = block.match(/order\s*number\s*[:\s]*\s*([\d\w]{5,})/i)
+    const rawOrderNum = onM ? fixOcrDigits(onM[1]).replace(/[^\d]/g, '') : null
+    const orderNumber = rawOrderNum && rawOrderNum.length >= 6 ? rawOrderNum : null
 
-    // Estimated value: from postBlock only — never bleeds from adjacent cards
-    const evM  = postBlock.match(/estimated\s*value\s*[:\s]*\s*([\d,]+\.?\d*)/i)
-    const gross = evM ? +evM[1].replace(/,/g, '') : null
+    // Quantity: prefer the labeled body field; fall back to value from the header
+    const qM  = block.match(/\bquantity\s*[:\s]*\s*([\d\w]+)/i)
+    const qty  = qM ? (+(fixOcrDigits(qM[1]).replace(/[^\d]/g, '')) || headerQty) : headerQty
+
+    // Estimated value: from labeled body field only — never bleeds from adjacent cards
+    const evM  = block.match(/estimated\s*value\s*[:\s]*\s*([\d,]+\.?\d*)/i)
+    let gross = evM ? parseDecimal(evM[1]) : null
+    // Tesseract sometimes drops the decimal point ("27880" instead of "278.80");
+    // if implied price per share is > GHS 200 it's almost certainly a 100× error
+    if (gross && qty > 0 && gross / qty > 200) gross = +(gross / 100).toFixed(2)
 
     if (orderType && symbol && qty > 0 && date && gross > 0) {
       const fee = +(gross * IC_FEE_RATE).toFixed(2)
       const net = orderType === 'Buy' ? +(gross + fee).toFixed(2) : +(gross - fee).toFixed(2)
+      const emailId = orderNumber
+        ? `screenshot_${orderNumber}`
+        : `screenshot_${symbol}_${date}_${qty}`
       results.push({
         symbol,
         orderType,
@@ -84,8 +98,8 @@ function parseTradeLiveText(rawText) {
         pricePerShare: +(gross / qty).toFixed(4),
         executionDate: date,
         settlementDate: date,
-        orderNumber,
-        emailId: `screenshot_${orderNumber}`,
+        orderNumber: orderNumber || undefined,
+        emailId,
         source: 'screenshot',
         status: 'COMPLETE',
       })
@@ -105,18 +119,74 @@ async function checkDuplicate(trade) {
 }
 
 const fmt     = n => n?.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmtDate = s => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+const fmtDate = s => {
+  if (!s) return '—'
+  const d = new Date(s + 'T00:00:00')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = String(d.getFullYear()).slice(-2)
+  return `${dd}/${mm}/${yy}`
+}
+// Convert YYYY-MM-DD → dd/mm/yy for display
+const toDisplayDate = iso =>
+  iso?.match(/^\d{4}-\d{2}-\d{2}$/)
+    ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`
+    : iso || ''
+// Parse dd/mm/yy or dd/mm/yyyy → YYYY-MM-DD; returns null if not fully formed
+const fromDisplayDate = s => {
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (!m) return null
+  const year = m[3].length === 2 ? `20${m[3]}` : m[3]
+  return `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+}
 
 export default function ImportScreenshotModal({ onClose }) {
-  const [phase,    setPhase]    = useState('idle')
-  const [progress, setProgress] = useState(0)
-  const [preview,  setPreview]  = useState([])
-  const [error,    setError]    = useState(null)
-  const [imgSrc,   setImgSrc]   = useState(null)
+  const [phase,      setPhase]      = useState('idle')
+  const [progress,   setProgress]   = useState(0)
+  const [preview,    setPreview]    = useState([])
+  const [error,      setError]      = useState(null)
+  const [imgSrc,     setImgSrc]     = useState(null)
+  const [editingIdx, setEditingIdx] = useState(null)
+  const [draft,      setDraft]      = useState(null)
   const fileRef = useRef(null)
 
   const newCount = preview.filter(p => !p.isDuplicate).length
   const dupCount = preview.filter(p =>  p.isDuplicate).length
+
+  function startEdit(idx) {
+    const t = preview[idx].trade
+    setDraft({
+      symbol:             t.symbol,
+      orderType:          t.orderType,
+      quantity:           String(t.quantity),
+      grossConsideration: String(t.grossConsideration),
+      executionDate:      t.executionDate,
+      dateDisplay:        toDisplayDate(t.executionDate),
+    })
+    setEditingIdx(idx)
+  }
+
+  function commitEdit() {
+    const qty   = +draft.quantity || 0
+    const gross = +draft.grossConsideration || 0
+    const fee   = +(gross * IC_FEE_RATE).toFixed(2)
+    const net   = draft.orderType === 'Buy' ? +(gross + fee).toFixed(2) : +(gross - fee).toFixed(2)
+    const updated = {
+      ...preview[editingIdx].trade,
+      symbol:             draft.symbol.toUpperCase().trim(),
+      orderType:          draft.orderType,
+      quantity:           qty,
+      grossConsideration: gross,
+      processingFee:      fee,
+      netConsideration:   net,
+      pricePerShare:      qty > 0 ? +(gross / qty).toFixed(4) : 0,
+      executionDate:      draft.executionDate,
+      settlementDate:     draft.executionDate,
+    }
+    setPreview(prev => prev.map((p, i) => i === editingIdx ? { ...p, trade: updated } : p))
+    setEditingIdx(null)
+    setDraft(null)
+  }
 
   async function processFile(file) {
     if (!file?.type.startsWith('image/')) return
@@ -126,34 +196,16 @@ export default function ImportScreenshotModal({ onClose }) {
     if (imgSrc) URL.revokeObjectURL(imgSrc)
     setImgSrc(URL.createObjectURL(file))
 
-    let fakeP = 0
-    const timer = setInterval(() => {
-      fakeP = Math.min(fakeP + 0.012, 0.85)
-      setProgress(fakeP)
-    }, 120)
-
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result.split(',')[1])
-        reader.onerror = reject
-        reader.readAsDataURL(file)
+      const worker = await createWorker('eng', 1, {
+        logger: m => {
+          if (m.status === 'loading language traineddata') setProgress(m.progress * 0.1)
+          else if (m.status === 'recognizing text') setProgress(0.1 + m.progress * 0.9)
+        },
       })
-
-      const res = await fetch('/api/vision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64 }),
-      })
-
-      clearInterval(timer)
+      const { data: { text } } = await worker.recognize(file)
+      await worker.terminate()
       setProgress(1)
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Vision API error')
-      }
-      const { text } = await res.json()
 
       const trades = parseTradeLiveText(text)
       if (trades.length === 0) {
@@ -168,7 +220,6 @@ export default function ImportScreenshotModal({ onClose }) {
       setPreview(withDup)
       setPhase('preview')
     } catch (err) {
-      clearInterval(timer)
       setError(`Reading failed: ${err.message}`)
       setPhase('idle')
     }
@@ -283,7 +334,7 @@ export default function ImportScreenshotModal({ onClose }) {
                 style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 8, marginBottom: 18, objectFit: 'contain' }}
               />
             )}
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>Analyzing with Cloud Vision…</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>Reading with Tesseract…</div>
             <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 99, height: 4, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
@@ -323,37 +374,177 @@ export default function ImportScreenshotModal({ onClose }) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
-              {preview.map(({ trade: t, isDuplicate }, idx) => (
-                <div key={idx} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 12px',
-                  background: isDuplicate ? 'transparent' : 'rgba(91,227,140,0.04)',
-                  border: `1px solid ${isDuplicate ? 'var(--border)' : 'rgba(91,227,140,0.18)'}`,
-                  borderRadius: 'var(--r-sm)',
-                  opacity: isDuplicate ? 0.45 : 1,
-                }}>
-                  <span style={{
-                    fontSize: 9, fontWeight: 800, letterSpacing: '0.07em',
-                    color: t.orderType === 'Buy' ? 'var(--gold)' : 'var(--red)',
-                    background: t.orderType === 'Buy' ? 'var(--gold-dim)' : 'var(--red-dim)',
-                    borderRadius: 4, padding: '2px 6px', flexShrink: 0,
+              {preview.map(({ trade: t, isDuplicate }, idx) => {
+                const isEditing = editingIdx === idx
+                const draftGross = isEditing ? (+draft.grossConsideration || 0) : 0
+                const draftQty   = isEditing ? (+draft.quantity || 0) : 0
+                const draftFee   = isEditing ? +(draftGross * IC_FEE_RATE).toFixed(2) : 0
+                const draftNet   = isEditing
+                  ? (draft.orderType === 'Buy' ? +(draftGross + draftFee).toFixed(2) : +(draftGross - draftFee).toFixed(2))
+                  : 0
+
+                return (
+                  <div key={idx} style={{
+                    padding: isEditing ? '12px' : '10px 12px',
+                    background: isDuplicate ? 'transparent' : isEditing ? 'rgba(240,194,94,0.04)' : 'rgba(91,227,140,0.04)',
+                    border: `1px solid ${isDuplicate ? 'var(--border)' : isEditing ? 'rgba(240,194,94,0.30)' : 'rgba(91,227,140,0.18)'}`,
+                    borderRadius: 'var(--r-sm)',
+                    opacity: isDuplicate ? 0.45 : 1,
                   }}>
-                    {t.orderType.toUpperCase()}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                      {t.quantity.toLocaleString()} {t.symbol}
-                    </div>
-                    <div className="mono" style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>
-                      GHS {fmt(t.grossConsideration)} · {fmtDate(t.executionDate)}
-                    </div>
+                    {isEditing ? (
+                      /* ── Edit form ── */
+                      <div>
+                        {/* Order number reference */}
+                        {preview[idx].trade.orderNumber && (
+                          <div className="mono" style={{ fontSize: 9, color: 'var(--dim)', marginBottom: 8 }}>
+                            Order #{preview[idx].trade.orderNumber}
+                          </div>
+                        )}
+                        {/* Row 1: type toggle + symbol + date */}
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                          {/* Buy/Sell toggle */}
+                          <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+                            {['Buy', 'Sell'].map(type => (
+                              <button key={type} onClick={() => setDraft(d => ({ ...d, orderType: type }))} style={{
+                                padding: '5px 10px', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                                background: draft.orderType === type
+                                  ? (type === 'Buy' ? 'rgba(240,194,94,0.18)' : 'rgba(255,142,138,0.18)')
+                                  : 'transparent',
+                                color: draft.orderType === type
+                                  ? (type === 'Buy' ? 'var(--gold)' : 'var(--red)')
+                                  : 'var(--dim)',
+                              }}>
+                                {type}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Symbol */}
+                          <input
+                            value={draft.symbol}
+                            onChange={e => setDraft(d => ({ ...d, symbol: e.target.value.toUpperCase() }))}
+                            placeholder="SYMBOL"
+                            style={{
+                              flex: 1, padding: '5px 8px', background: 'rgba(255,255,255,0.05)',
+                              border: '1px solid var(--border)', borderRadius: 6,
+                              color: 'var(--gold)', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                            }}
+                          />
+                          {/* Date */}
+                          <input
+                            type="text"
+                            value={draft.dateDisplay}
+                            onChange={e => {
+                              const display = e.target.value
+                              const iso = fromDisplayDate(display)
+                              setDraft(d => ({ ...d, dateDisplay: display, executionDate: iso ?? d.executionDate }))
+                            }}
+                            placeholder="dd/mm/yy"
+                            maxLength={8}
+                            style={{
+                              width: 76, padding: '5px 8px', background: 'rgba(255,255,255,0.05)',
+                              border: '1px solid var(--border)', borderRadius: 6,
+                              color: 'var(--text)', fontSize: 11, fontFamily: 'monospace',
+                              textAlign: 'center',
+                            }}
+                          />
+                        </div>
+                        {/* Row 2: qty + gross */}
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 9, color: 'var(--dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Shares</div>
+                            <input
+                              type="number"
+                              value={draft.quantity}
+                              onChange={e => setDraft(d => ({ ...d, quantity: e.target.value }))}
+                              style={{
+                                width: '100%', padding: '5px 8px', background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid var(--border)', borderRadius: 6,
+                                color: 'var(--text)', fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box',
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 9, color: 'var(--dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Gross (GHS)</div>
+                            <input
+                              type="number"
+                              value={draft.grossConsideration}
+                              onChange={e => setDraft(d => ({ ...d, grossConsideration: e.target.value }))}
+                              style={{
+                                width: '100%', padding: '5px 8px', background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid var(--border)', borderRadius: 6,
+                                color: 'var(--text)', fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box',
+                              }}
+                            />
+                          </div>
+                        </div>
+                        {/* Fee summary */}
+                        {draftGross > 0 && draftQty > 0 && (
+                          <div style={{
+                            display: 'flex', justifyContent: 'space-between',
+                            padding: '6px 10px', marginBottom: 8,
+                            background: 'rgba(255,255,255,0.03)', borderRadius: 6,
+                            fontSize: 10, color: 'var(--muted)', fontFamily: 'monospace',
+                          }}>
+                            <span>Fee 2.5%: GHS {fmt(draftFee)}</span>
+                            <span>Net: GHS {fmt(draftNet)}</span>
+                            <span>@ GHS {(draftGross / draftQty).toFixed(4)}/sh</span>
+                          </div>
+                        )}
+                        {/* Save / Cancel */}
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => { setEditingIdx(null); setDraft(null) }} style={{
+                            flex: 1, padding: '7px 0', borderRadius: 6, cursor: 'pointer',
+                            background: 'transparent', border: '1px solid var(--border)',
+                            color: 'var(--dim)', fontSize: 12,
+                          }}>Cancel</button>
+                          <button onClick={commitEdit} style={{
+                            flex: 2, padding: '7px 0', borderRadius: 6, cursor: 'pointer',
+                            background: 'var(--gold-grad)', border: 'none',
+                            color: '#080A10', fontSize: 12, fontWeight: 700,
+                          }}>Save changes</button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* ── Read-only row ── */
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{
+                          fontSize: 9, fontWeight: 800, letterSpacing: '0.07em',
+                          color: t.orderType === 'Buy' ? 'var(--gold)' : 'var(--red)',
+                          background: t.orderType === 'Buy' ? 'var(--gold-dim)' : 'var(--red-dim)',
+                          borderRadius: 4, padding: '2px 6px', flexShrink: 0,
+                        }}>
+                          {t.orderType.toUpperCase()}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                            {t.quantity.toLocaleString()} {t.symbol}
+                          </div>
+                          <div className="mono" style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1 }}>
+                            GHS {fmt(t.grossConsideration)} · {fmtDate(t.executionDate)}
+                          </div>
+                          {t.orderNumber && (
+                            <div className="mono" style={{ fontSize: 9, color: 'var(--dim)', marginTop: 2 }}>
+                              Order #{t.orderNumber}
+                            </div>
+                          )}
+                        </div>
+                        {isDuplicate
+                          ? <span style={{ fontSize: 10, color: 'var(--gold)', flexShrink: 0 }}>duplicate</span>
+                          : (
+                            <button onClick={() => startEdit(idx)} style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              color: 'var(--muted)', padding: 4, fontSize: 15, lineHeight: 1,
+                              flexShrink: 0,
+                            }}>
+                              <i className="ti ti-edit" aria-hidden="true" />
+                            </button>
+                          )
+                        }
+                      </div>
+                    )}
                   </div>
-                  {isDuplicate
-                    ? <span style={{ fontSize: 10, color: 'var(--gold)', flexShrink: 0 }}>duplicate</span>
-                    : <i className="ti ti-circle-check" style={{ color: 'var(--green)', fontSize: 17, flexShrink: 0 }} aria-hidden="true" />
-                  }
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
@@ -368,16 +559,22 @@ export default function ImportScreenshotModal({ onClose }) {
                 Cancel
               </button>
               <button
-                onClick={newCount > 0 ? importTrades : onClose}
+                onClick={newCount > 0 && editingIdx === null ? importTrades : (editingIdx !== null ? undefined : onClose)}
+                disabled={editingIdx !== null}
                 style={{
                   flex: 2, padding: 12, borderRadius: 'var(--r-md)', fontWeight: 600,
-                  cursor: 'pointer', border: 'none', fontSize: 13,
-                  background: newCount > 0 ? 'var(--gold-grad)' : 'rgba(255,255,255,0.06)',
-                  boxShadow: newCount > 0 ? 'var(--gold-glow)' : 'none',
-                  color: newCount > 0 ? '#080A10' : 'var(--muted)',
+                  cursor: editingIdx !== null ? 'not-allowed' : 'pointer', border: 'none', fontSize: 13,
+                  background: newCount > 0 && editingIdx === null ? 'var(--gold-grad)' : 'rgba(255,255,255,0.06)',
+                  boxShadow: newCount > 0 && editingIdx === null ? 'var(--gold-glow)' : 'none',
+                  color: newCount > 0 && editingIdx === null ? '#080A10' : 'var(--muted)',
+                  opacity: editingIdx !== null ? 0.5 : 1,
                 }}
               >
-                {newCount > 0 ? `Import ${newCount} trade${newCount !== 1 ? 's' : ''}` : 'Nothing new to import'}
+                {editingIdx !== null
+                  ? 'Finish editing first'
+                  : newCount > 0
+                    ? `Import ${newCount} trade${newCount !== 1 ? 's' : ''}`
+                    : 'Nothing new to import'}
               </button>
             </div>
           </>

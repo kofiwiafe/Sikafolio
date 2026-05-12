@@ -1,0 +1,51 @@
+GSE LISTED COMPANIES — TICKER REFERENCE
+========================================
+Use these ticker symbols as the filename when adding logos.
+Example: MTN Ghana → save logo as MTNGH.png
+
+TICKER      COMPANY NAME
+----------  ----------------------------------------
+AADS        AngloGold Ashanti Depository Shares
+ACCESS      Access Bank Ghana
+ADB         Agricultural Development Bank
+AGA         AngloGold Ashanti
+ALLGH       Atlantic Lithium Limited
+ALW         Aluworks Ltd
+ASG         Asante Gold Corporation
+BOPP        Benso Oil Palm Plantation
+CAL         CalBank Plc
+CLYD        Clydesstone (Ghana) Ltd
+CMLT        Camelot Ghana Ltd
+CPC         Cocoa Processing Company
+DASPHARMA   Dannex Ayrton Starwin Plc
+EGH         Ecobank Ghana
+EGL         Enterprise Group
+ETI         Ecobank Transnational
+FAB         First Atlantic Bank
+FML         Fan Milk Plc
+GCB         GCB Bank
+GGBL        Guinness Ghana Breweries
+GLD         NewGold Issuer Limited
+GOIL        GOIL Plc
+HFC         Republic Bank Ghana
+HORDS       Hords Ltd
+IIL         Intravenous Infusions Ltd
+KAS         Kasapreko PLC
+MAC         Mega African Capital Ltd
+MLC         Mechanical Lloyd Company
+MMH         Meridian-Marshalls Holdings
+MTNGH       MTN Ghana
+PBC         Produce Buying Company Ltd
+POP         Pesewa One PLC
+PZC         PZ Cussons Ghana
+RBGH        Republic Bank Ghana
+SAMBA       Samba Foods Ltd
+SCB         Standard Chartered Ghana
+SCBPREF     Standard Chartered Ghana Preference Shares
+SIC         SIC Insurance
+SOGEGH      Societe Generale Ghana
+TBL         Trust Bank Ltd (The Gambia)
+TLW         Tullow Oil PLC
+TOTAL       TotalEnergies Marketing Ghana
+UNIL        Unilever Ghana
+ZEN         Zen Petroleum

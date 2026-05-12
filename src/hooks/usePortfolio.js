@@ -8,6 +8,11 @@ export function usePortfolio(prices = {}) {
 
   if (!trades) return { holdings: [], summary: null, loading: true }
 
+  // Total cash received from all sell trades (gross consideration)
+  const stocksSold = trades
+    .filter(t => t.orderType === 'Sell')
+    .reduce((s, t) => s + (t.grossConsideration || 0), 0)
+
   // Group by symbol
   const grouped = {}
   for (const t of trades) {
@@ -76,6 +81,7 @@ export function usePortfolio(prices = {}) {
       totalPnL,
       totalPct,
       totalFees,
+      stocksSold,
       positions: holdings.length,
       lastTrade: trades.length > 0
         ? trades.sort((a, b) => new Date(b.executionDate) - new Date(a.executionDate))[0].settlementDate

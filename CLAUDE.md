@@ -1,6 +1,6 @@
 # SikaFolio — Claude Preferences
 
-## App status (as of 2026-05-10, last updated 2026-05-10)
+## App status (as of 2026-05-11, last updated 2026-05-16)
 The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys from `master`).
 
 
@@ -13,26 +13,34 @@ The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys f
 - **Gmail state persistence** — confirmed Gmail email persisted to localStorage (`sikafolio_gmail_email`); access token kept in memory only (short-lived, expires ~1 hour, must reconnect)
 - **Scheduled auto-sync** — removed; App.jsx is now a clean shell (session + screen routing + `usePrices`); auto-sync logic was extracted and is currently not active
 - **Paste-to-import** — fallback parser for raw email text copied from any client (no Gmail API needed)
-- **Local database** (`db.js`) — Dexie/IndexedDB; version 3 schema; see DB schema section for details
-- **Price service** (`priceService.js`) + `usePrices` hook — live GSE stock prices from afx.kwayisi.org via three-tier fetch chain: (1) `/api/gse` Vercel serverless proxy, (2) allorigins.win CORS proxy, (3) Dexie cache; polls every 5 min during market hours (Mon–Fri 10:00–15:00 GMT); parser captures symbol, name, price, change, changePercent, volume; skips non-ticker rows (only accepts 2–10 uppercase letters); after each successful fetch, upserts a daily `priceSnapshots` record to IndexedDB (used by portfolio history chart)
-- **Portfolio hook** (`usePortfolio.js`) — computes positions, weighted average cost (WAC), unrealized PnL, realized PnL per holding; re-runs reactively via `useLiveQuery`
-- **Portfolio history hook** (`usePortfolioHistory.js`) — returns `{ date, value }[]` sorted chronologically; merges trade settlement dates + price snapshot dates; replays trades per date to get shares held; prices from snapshot (preferred) or `pricePerShare` fallback; filters out zero-value points; used by the sparkline
-- **Portfolio page** (`Portfolio.jsx`) — hero card with "Currently worth" value + gold sparkline + time-range toggles (W / 1M / 1Y / All); PnL badge reflects performance within the selected range (first vs last chart point); four 2×2 stat cards below: Investment | Fees paid | Total invested | Stocks held
-- **Portfolio sparkline** — hand-rolled SVG polyline with gradient fill area; `usePortfolioHistory` provides historical points; today's live value from `usePortfolio` is always appended as the rightmost point; the range-specific ▲/▼ % badge swaps to all-time PnL when there's fewer than 2 historical points
-- **StockCard** (`src/components/StockCard.jsx`) — holding card layout (top-down):
-  - Row 1: `CompanyLogo` (size="md") + ticker symbol + share count (16px bold) + unrealised PnL in green/red | right: "Current price" label + GHS price
-  - Middle: PnL progress bar (gold if up, red if down); no label on the bar itself
-  - Bottom row: "Mkt value" + GHS amount | right: daily % change with ▲/▼ indicator
+- **ImportScreenshotModal** (`src/components/ImportScreenshotModal.jsx`) — bottom-sheet modal for importing trades from iC Wealth Order History screenshots; OCR via Tesseract.js; parser (`parseTradeLiveText`) anchors on **card headers** (`"Buy 41 MTNGH"` / `"Sell 30 SIC"` pattern, no leading `\b` so OCR tab-bar merges like `"HistoryBuy 41 MTNGH"` are still caught), NOT on `"Order number"` — that field was unreliable for the first card in multi-card screenshots causing it to be silently dropped; each card block spans from its header anchor to the next; all fields extracted within the block: **date** from ordinal format (`"6th May 2026"`) to avoid matching the `"As of 10 May 2026"` page header (verified captured for all cards), orderType from header word, quantity from labeled body field with header fallback, estimated value from labeled body field; order number is nice-to-have for dedup but no longer required; fee auto-calculated at 2.5%; deduplication: `checkDuplicate()` checks `orderNumber` first, falls back to `emailId` (`screenshot_<orderNumber>` or `screenshot_<SYMBOL>_<date>_<qty>` when order number unreadable); saved with `source: 'screenshot'`
+  - **Editable preview** — after OCR, each non-duplicate card shows a pencil icon (✏) to expand inline edit form with: Buy/Sell toggle, symbol input, date text input (dd/mm/yy format), shares + gross inputs; fee (2.5%), net, and price-per-share recalculate live; "Save changes" writes back to preview state recomputing all derived fields; Import button shows "Finish editing first" and is disabled while any card is open for editing; duplicate cards are dimmed and not editable
+  - **Order number display** — shown in read-only card rows as `Order #XXXXXXXXX` (dim monospace, below the GHS + date line) and as a non-editable reference header inside the edit form; hidden if OCR couldn't read it; still used for deduplication
+  - **Date format** — all dates shown as `dd/mm/yy` (e.g. `14/04/26`); edit form uses a `type="text"` input (not `type="date"`) with `toDisplayDate`/`fromDisplayDate` helpers converting between display format and internal `YYYY-MM-DD`; `executionDate` in draft state only updates when the full pattern is matched, so partial typing doesn't corrupt the stored value
+- **Local database** (`db.js`) — Dexie/IndexedDB; version 4 schema; see DB schema section for details
+- **Price service** (`priceService.js`) + `usePrices` hook — live GSE stock prices from afx.kwayisi.org via three-tier fetch chain: (1) `/api/gse` Vercel serverless proxy, (2) allorigins.win CORS proxy, (3) Dexie cache; polls every 5 min during market hours (Mon–Fri 10:00–15:00 GMT); parser captures symbol, name, price, change, changePercent, volume; skips non-ticker rows (only accepts 2–10 uppercase letters); after each successful fetch, upserts a daily `priceSnapshots` record to IndexedDB (used by portfolio history chart); `isMarketOpen()` is **exported** so UI components can use it directly
+- **Portfolio hook** (`usePortfolio.js`) — computes positions, WAC, unrealized PnL, realized PnL per holding; also totals `stocksSold` (sum of `grossConsideration` from ALL sell trades, including fully-sold positions) before the holdings filter so no sold cash is missed; re-runs reactively via `useLiveQuery`
+- **Portfolio history hook** (`usePortfolioHistory.js`) — returns `{ date, value }[]` sorted chronologically; merges trade settlement dates + price snapshot dates; replays trades per date to get shares held; prices from snapshot (preferred) or `pricePerShare` fallback; filters out zero-value points; **currently unused** (sparkline was removed)
+- **Portfolio page** (`Portfolio.jsx`) — hero card with two equal columns: left = "Current Balance" (GHS value, 28px mono) + day-over-day % badge (weighted `changePercent` across holdings, hidden when no prices); right = "Profit / Loss (P&L)" (GHS PnL in green/red, 28px mono); vertical border divider between columns; gold ambient blob top-right; four 2×2 stat cards below: **Invested | Fees paid | Stocks sold | Stocks held**; header right shows market status chip (see below) that opens `PriceInfoSheet` on tap
+- **Stocks sold stat** — total gross cash received from all sell trades ever (`summary.stocksSold`); not profit, just the money received; includes stocks fully sold (which are excluded from holdings)
+- **StockCard** (`src/components/StockCard.jsx`) — three-column holding card; left column (`flex:1`) + middle (fixed `width:110`) + right (fixed `width:100`) for consistent cross-card alignment:
+  - Left column (stacked): top row = `CompanyLogo` (size="md") + ticker (gold, 15px bold) + share count + company name below; bottom row = "P&L" label + ▲/▼ value + (pct%) all inline
+  - Middle column: "Current value" label (no GHS prefix) + formatted value, centered
+  - Right column: "Current price" label (no GHS prefix) + price + daily ▲/▼ X.XX% (no "today"), right-aligned
   - No "X purchases · avg GHS Y" line — that info is not shown on the card
+- **ConfirmCodeModal** (`src/components/ConfirmCodeModal.jsx`) — shared bottom-sheet modal for confirming destructive or sensitive actions; generates a random 4-digit code (1000–9999) via `useMemo` on mount, displays it large in accent color, requires exact match in a numeric input before enabling Confirm; `destructive` prop switches theme from gold to red; shake animation on wrong code entry; works identically for all user types (no DB lookup, no passcode required); used by Trades (edit + delete) and Settings (clear all data)
 - **AddTradeModal**, **EditTradeModal**, **SyncPanel** — reusable UI components; `EditTradeModal` mirrors `AddTradeModal` but calls `db.trades.update(trade.id, …)` and pre-fills all fields from the existing trade record
 - **AddTradeModal symbol combobox** (`AddTradeModal.jsx`) — Symbol field is a searchable combobox backed by `GSE_COMPANIES`; filters by ticker prefix OR company name (case-insensitive); dropdown shows "YOUR HOLDINGS" section (stocks with prior trades) first, then "ALL GSE STOCKS" below; section headers only appear when no search query is active; owned stocks queried reactively via `useLiveQuery(() => db.trades.orderBy('symbol').uniqueKeys(), [], [])`; blur/mousedown race condition avoided by using `onMouseDown` for item selection and `setTimeout(..., 150)` on `onBlur`
 - **AddTradeModal fee calculation** — `IC_FEE_RATE = 0.025` (2.5%) is a module-level constant; no manual fee input; `feeVal = +(gross * IC_FEE_RATE).toFixed(2)`; `net = gross + fee` for Buy, `gross - fee` for Sell; summary card shows 3-column Gross | Fee (2.5%) | Net layout when qty × price > 0
 - **Trades page** (`Trades.jsx`) — two levels of live PnL + edit/delete per trade row:
-  - **Per trade row** (BUY only): `(currentPrice − pricePerShare) × quantity` shown below the net consideration in green/red; hidden for SELL rows; each row has a gold Edit button (opens `EditTradeModal`) and a red Delete button (triggers `VerifyModal` passcode check before deleting)
+  - **Per trade row** (BUY only): `(currentPrice − pricePerShare) × quantity` shown below the net consideration in green/red; hidden for SELL rows; each row has a gold Edit button and a red Delete button — both trigger `ConfirmCodeModal` before executing
   - **Per company group header**: total position PnL shown below the share count — calculated as `(currentPrice − avgCost) × netShares` where `avgCost` is the WAC across all buys; consistent with `usePortfolio` logic; hidden if no live price or no remaining shares
-  - **VerifyModal** — inline bottom sheet that requires passcode entry (or skips for Google users) before destructive actions; accepts `title`, `subtitle`, `destructive`, `onVerified`, `onCancel` props
-- **Settings screen** — shows real user avatar (or initial fallback), Gmail connect/disconnect, Sign out; last sync date and trade count; "Clear all portfolio data" section with inline two-step confirmation (type "DELETE" to unlock, then confirm) that wipes all trades from IndexedDB
-- **Markets page** (`Markets.jsx`) — lists all GSE-listed equities with company logo, full name, ticker, live price, absolute + percentage change (colour-coded green/red), and volume; shows GSE Composite Index card at top
+  - **P&L consistency**: per-trade P&Ls are pre-computed inside `CompanyGroup` using the same `currentPrice` variable that drives the group header, then passed as a `pnl` prop to each `TradeRow` — this guarantees the sum of individual rows always equals the group total (no stale-render divergence)
+  - Edit flow: code confirmed → `setEditing(trade)` opens `EditTradeModal`; Delete flow: code confirmed → `db.trades.delete(trade.id)`
+- **Settings screen** — shows real user avatar (or initial fallback), Gmail connect/disconnect, Sign out; last sync date and trade count; "Clear all portfolio data" button triggers `ConfirmCodeModal` (destructive) → on verify calls `db.trades.clear()` + deletes `lastSyncDate` from syncMeta
+- **Markets page** (`Markets.jsx`) — lists all GSE-listed equities with company logo, full name, ticker, live price, absolute + percentage change (colour-coded green/red), and volume; shows GSE Composite Index card at top; header right shows market status chip (see below) that opens `PriceInfoSheet` on tap
+- **Market status chip** — appears in the top-right header of Portfolio and Markets pages; uses `isMarketOpen()` to show `● MARKET OPEN` (green tint, animated dot) or `● MARKET CLOSED` (muted, static grey dot) + `ⓘ` icon; tapping opens `PriceInfoSheet`
+- **PriceInfoSheet** (`src/components/PriceInfoSheet.jsx`) — bottom-sheet modal explaining price data context; states prices are official GSE closing prices (updated once after each session, 15:00 GMT), not real-time broker feed prices; shows source row (afx.kwayisi.org + last-updated time); backdrop tap or "Got it" button to dismiss; used by Portfolio and Markets
 - **Company logo system** — `CompanyLogo` component (`src/components/CompanyLogo.jsx`) with three-tier fallback: Clearbit full logo → Google S2 favicon → coloured letter avatar; accepts `size` prop (`"sm"` 32px / `"md"` 40px / `"lg"` 52px); import it anywhere a company logo is needed
 - **GSE company registry** (`src/constants/gseCompanies.js`) — single source of truth mapping every GSE ticker to `{ name, domain }`; `getCompany(symbol)` helper returns the entry or a sensible default; update this file when adding new tickers or correcting domains, not inside components
 
@@ -100,7 +108,8 @@ Settlement Date:  Tue, 12 May, 2026
 ### Portfolio calculation
 - `usePortfolio` groups trades by symbol, then by `orderType === 'Buy'` vs sell
 - WAC (weighted average cost) = total gross consideration / total shares bought
-- `netShares = totalBought - totalSold` — if ≤ 0, position is excluded
+- `netShares = totalBought - totalSold` — if ≤ 0, position is excluded from holdings
+- `stocksSold` is computed from raw `trades` BEFORE the holdings filter so fully-sold stocks are counted; it is the sum of `grossConsideration` on all sell trades (not profit)
 - PnL = `(currentPrice * netShares) - (avgCost * netShares)` using live GSE prices
 - Prices keyed by uppercase ticker symbol (e.g., `'MTNGH'`, `'SIC'`, `'GCB'`, `'CAL'`) — must match parsed trade symbols exactly
 
@@ -114,6 +123,11 @@ Settlement Date:  Tue, 12 May, 2026
   - `values` is `{ SYMBOL: price }` — a snapshot of all fetched GSE prices for that day
   - Written by `usePrices` after every successful `fetchLatestPrices()` call
   - Read by `usePortfolioHistory` to reconstruct historical portfolio values
+- Version 4: adds `orderNumber` index to `trades` for screenshot import dedup
+
+### Trade date fields
+- `executionDate` — used for display and sort order in Trades.jsx; stored as full ISO string by Gmail/paste/manual, as `YYYY-MM-DD` by screenshot import; all consumers use `new Date(executionDate)` or `.slice(0, 10)` so both formats work
+- `settlementDate` — secondary display field ("settled …"); raw string from Gmail email body, `YYYY-MM-DD` from manual/screenshot/edit; used by `usePortfolioHistory` via `toDate = str => str?.slice(0, 10)` fallback chain; may be null for Gmail trades where settlement line was missing in the email
 
 ## Splash screen design preferences
 - No "Sign in" header inside the card — the logo + tagline above serve that purpose
@@ -179,7 +193,7 @@ Settlement Date:  Tue, 12 May, 2026
 
 ### Color usage
 - Foreground hierarchy: `--text` → `--muted` → `--dim`. Don't invent in-between grays.
-- Gold reserved for: wordmark "Folio", primary action button, active nav item, ticker symbols on logo rows, sparkline fill on positive, range-selector active chip.
+- Gold reserved for: wordmark "Folio", primary action button, active nav item, ticker symbols on logo rows.
 - Never gold for: card backgrounds, body text, full-width fills, section headers.
 - Green/red are semantic only. Green = positive change, BUY, live indicator. Red = negative change, SELL.
 - A green/red value must carry a ▲/▼ glyph so color is not the only signal.

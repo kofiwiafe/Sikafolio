@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../services/db'
 import Logo from '../components/Logo'
@@ -6,133 +6,19 @@ import CompanyLogo from '../components/CompanyLogo'
 import AddTradeModal from '../components/AddTradeModal'
 import EditTradeModal from '../components/EditTradeModal'
 import ImportScreenshotModal from '../components/ImportScreenshotModal'
+import ConfirmCodeModal from '../components/ConfirmCodeModal'
 import { getCompany } from '../constants/gseCompanies'
 
 const fmt = (n) => n?.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// ── Passcode verification sheet ──────────────────────────────────────────────
-
-function VerifyModal({ title, subtitle, destructive, onVerified, onCancel }) {
-  const [code, setCode]         = useState('')
-  const [error, setError]       = useState(null)
-  const [checking, setChecking] = useState(false)
-  const [isGoogle, setIsGoogle] = useState(null)
-
-  useEffect(() => {
-    async function detect() {
-      const session = JSON.parse(localStorage.getItem('sikafolio_session') || '{}')
-      if (!session.email) { setIsGoogle(true); return }
-      const user = await db.users.where('email').equals(session.email).first()
-      setIsGoogle(!user || user.provider === 'google')
-    }
-    detect()
-  }, [])
-
-  async function handleConfirm() {
-    if (isGoogle) { onVerified(); return }
-    setError(null)
-    setChecking(true)
-    const session = JSON.parse(localStorage.getItem('sikafolio_session') || '{}')
-    const user = await db.users.where('email').equals(session.email).first()
-    if (!user || user.passcode === code) {
-      onVerified()
-    } else {
-      setError('Incorrect passcode')
-      setChecking(false)
-    }
-  }
-
-  const accentClr = destructive ? 'var(--red)' : 'var(--gold)'
-  const accentBg  = destructive ? 'var(--red-dim)' : 'var(--gold-dim)'
-  const accentBdr = destructive ? 'var(--red-border)' : 'var(--gold-border)'
-
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'flex-end' }}
-      onClick={onCancel}
-    >
-      <div
-        style={{ width: '100%', background: 'var(--surface-solid)', borderRadius: '16px 16px 0 0', padding: '24px 20px 44px' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div style={{ fontSize: 15, fontWeight: 700, color: accentClr, marginBottom: 4 }}>
-          {title}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.6 }}>
-          {isGoogle === null ? 'Loading…' : subtitle}
-        </div>
-
-        {isGoogle === false && (
-          <>
-            <input
-              type="password"
-              placeholder="Enter passcode"
-              value={code}
-              onChange={e => { setCode(e.target.value); setError(null) }}
-              onKeyDown={e => e.key === 'Enter' && handleConfirm()}
-              autoFocus
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                background: 'var(--bg)',
-                border: `1px solid ${error ? 'var(--red)' : 'var(--border)'}`,
-                borderRadius: 'var(--r-sm)', padding: '11px 14px',
-                fontSize: 15, color: 'var(--text)', letterSpacing: '0.25em',
-                outline: 'none',
-                marginBottom: error ? 6 : 16,
-              }}
-            />
-            {error && (
-              <div style={{ fontSize: 11, color: 'var(--red)', marginBottom: 16 }}>
-                <i className="ti ti-alert-circle" style={{ marginRight: 4 }} aria-hidden="true" />
-                {error}
-              </div>
-            )}
-          </>
-        )}
-
-        {isGoogle !== null && (
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              onClick={onCancel}
-              style={{
-                flex: 1, padding: 12, borderRadius: 'var(--r-md)', cursor: 'pointer',
-                background: 'transparent', border: '1px solid var(--border)',
-                color: 'var(--dim)', fontSize: 13,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirm}
-              disabled={checking || (isGoogle === false && !code)}
-              style={{
-                flex: 2, padding: 12, borderRadius: 'var(--r-md)', fontWeight: 600,
-                cursor: checking || (isGoogle === false && !code) ? 'default' : 'pointer',
-                background: accentBg,
-                border: `1px solid ${accentBdr}`,
-                color: accentClr, fontSize: 13,
-                opacity: checking || (isGoogle === false && !code) ? 0.4 : 1,
-              }}
-            >
-              {checking ? 'Checking…' : 'Confirm'}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── Trade row ─────────────────────────────────────────────────────────────────
 
-function TradeRow({ t, isFirst, onEdit, onDelete, currentPrice }) {
+function TradeRow({ t, isFirst, onEdit, onDelete, pnl }) {
   const isBuy  = t.orderType === 'Buy'
   const date   = new Date(t.executionDate)
   const dateStr = date.toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' })
 
-  const unrealizedPnL = (isBuy && currentPrice != null)
-    ? (currentPrice - t.pricePerShare) * t.quantity
-    : null
+  const unrealizedPnL = pnl ?? null
   const pnlUp = unrealizedPnL >= 0
 
   return (
@@ -212,7 +98,7 @@ function TradeRow({ t, isFirst, onEdit, onDelete, currentPrice }) {
 
 // ── Company group ─────────────────────────────────────────────────────────────
 
-function CompanyGroup({ symbol, trades, onEdit, onDelete, currentPrice }) {
+function CompanyGroup({ symbol, trades, onEdit, onDelete, currentPrice, isOpen, onToggle }) {
   const company = getCompany(symbol)
 
   const buyTrades   = trades.filter(t => t.orderType === 'Buy')
@@ -229,10 +115,21 @@ function CompanyGroup({ symbol, trades, onEdit, onDelete, currentPrice }) {
     : null
   const pnlUp = unrealizedPnL >= 0
 
+  // Pre-compute per-trade P&Ls using the same currentPrice as the group header
+  const tradePnLs = {}
+  if (currentPrice != null) {
+    for (const t of buyTrades) {
+      tradePnLs[t.id] = (currentPrice - t.pricePerShare) * t.quantity
+    }
+  }
+
   return (
     <div style={{ borderBottom: '1px solid var(--border)' }}>
-      {/* Company header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 20px' }}>
+      {/* Company header — tappable to expand/collapse */}
+      <div
+        onClick={onToggle}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 20px', cursor: 'pointer', userSelect: 'none' }}
+      >
         <CompanyLogo symbol={symbol} size="md" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
@@ -245,23 +142,40 @@ function CompanyGroup({ symbol, trades, onEdit, onDelete, currentPrice }) {
             {company.name}
           </div>
         </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: netShares > 0 ? 'var(--text)' : 'var(--muted)' }}>
-            {netShares.toLocaleString()} <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--muted)' }}>shares</span>
-          </div>
-          {unrealizedPnL != null && (
-            <div className="mono" style={{ fontSize: 11, marginTop: 3, color: pnlUp ? 'var(--green)' : 'var(--red)', whiteSpace: 'nowrap' }}>
-              {pnlUp ? '▲ +' : '▼ '}GHS {fmt(unrealizedPnL)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: netShares > 0 ? 'var(--text)' : 'var(--muted)' }}>
+              {netShares.toLocaleString()} <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--muted)' }}>shares</span>
             </div>
-          )}
+            {unrealizedPnL != null && (
+              <div className="mono" style={{ fontSize: 11, marginTop: 3, color: pnlUp ? 'var(--green)' : 'var(--red)', whiteSpace: 'nowrap' }}>
+                {pnlUp ? '▲ +' : '▼ '}GHS {fmt(unrealizedPnL)}
+              </div>
+            )}
+          </div>
+          <i
+            className="ti ti-chevron-right"
+            style={{
+              fontSize: 16, color: 'var(--dim)', flexShrink: 0,
+              transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.25s ease',
+            }}
+          />
         </div>
       </div>
 
-      {/* Trade rows */}
-      <div style={{ background: 'rgba(0,0,0,0.18)', paddingBottom: 4 }}>
-        {trades.map((t, i) => (
-          <TradeRow key={t.id} t={t} isFirst={i === 0} onEdit={onEdit} onDelete={onDelete} currentPrice={currentPrice} />
-        ))}
+      {/* Trade rows — animated accordion */}
+      <div style={{
+        overflow: 'hidden',
+        maxHeight: isOpen ? `${trades.length * 90 + 20}px` : '0px',
+        opacity: isOpen ? 1 : 0,
+        transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease',
+      }}>
+        <div style={{ background: 'rgba(0,0,0,0.18)', paddingBottom: 4 }}>
+          {trades.map((t, i) => (
+            <TradeRow key={t.id} t={t} isFirst={i === 0} onEdit={onEdit} onDelete={onDelete} pnl={tradePnLs[t.id] ?? null} />
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -270,10 +184,15 @@ function CompanyGroup({ symbol, trades, onEdit, onDelete, currentPrice }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Trades({ prices }) {
-  const [showAdd,    setShowAdd]    = useState(false)
-  const [showImport, setShowImport] = useState(false)
-  const [pendingAction, setPending] = useState(null)
-  const [editingTrade, setEditing]  = useState(null)
+  const [showAdd,     setShowAdd]    = useState(false)
+  const [showImport,  setShowImport] = useState(false)
+  const [pendingAction, setPending]  = useState(null)
+  const [editingTrade,  setEditing]  = useState(null)
+  const [openSymbol,  setOpenSymbol] = useState(null)
+
+  function toggleSymbol(sym) {
+    setOpenSymbol(s => s === sym ? null : sym)
+  }
 
   const trades = useLiveQuery(() => db.trades.orderBy('executionDate').reverse().toArray(), [])
 
@@ -313,12 +232,12 @@ export default function Trades({ prices }) {
       {editingTrade && <EditTradeModal trade={editingTrade} onClose={() => setEditing(null)} />}
 
       {pa && (
-        <VerifyModal
-          title={pa.type === 'delete' ? `Delete trade` : `Edit trade`}
+        <ConfirmCodeModal
+          title={pa.type === 'delete' ? 'Delete trade' : 'Edit trade'}
           subtitle={
             pa.type === 'delete'
-              ? `This will permanently remove the ${pa.trade.orderType} of ${pa.trade.quantity?.toLocaleString()} ${pa.trade.symbol} shares. Enter your passcode to confirm.`
-              : `Enter your passcode to edit this ${pa.trade.symbol} trade.`
+              ? `This will permanently remove the ${pa.trade.orderType} of ${pa.trade.quantity?.toLocaleString()} ${pa.trade.symbol} shares.`
+              : `You are about to edit this ${pa.trade.symbol} trade.`
           }
           destructive={pa.type === 'delete'}
           onVerified={onVerified}
@@ -405,6 +324,8 @@ export default function Trades({ prices }) {
               onEdit={requestEdit}
               onDelete={requestDelete}
               currentPrice={prices?.prices?.[symbol]?.price ?? null}
+              isOpen={openSymbol === symbol}
+              onToggle={() => toggleSymbol(symbol)}
             />
           ))
         )}
