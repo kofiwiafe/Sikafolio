@@ -1,19 +1,19 @@
 # SikaFolio — Claude Preferences
 
-## App status (as of 2026-05-11, last updated 2026-05-16)
+## App status (as of 2026-05-12, last updated 2026-05-17)
 The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys from `master`).
 
 
 
 ### What's built
 - **Splash / Auth screen** (`Splash.jsx`) — two-step login (username → passcode), industry-standard sign-up (first name, last name, username with live availability check, passcode, confirm passcode), Google OAuth, session persistence via localStorage
-- **5 screens** — Portfolio, Trades, Markets, Settings, with a persistent BottomNav
+- **6 screens** — Portfolio, Trades, Markets, News, Settings, with a persistent BottomNav (5 tabs; nav button padding 8px to accommodate)
 - **Gmail sync** (`gmailService.js`) — OAuth via `@react-oauth/google`; fetches all iC Securities trade notification emails (`from:noreply@ic.africa subject:"Trade Notification" in:anywhere`), parses them, deduplicates by emailId, stores in IndexedDB; incremental syncs after first run using `after:<unix_timestamp>`
 - **Gmail confirmation flow** — after OAuth, Settings shows a confirmation card with the Gmail email address before committing; on confirm, app auto-navigates to Trades and auto-starts sync
 - **Gmail state persistence** — confirmed Gmail email persisted to localStorage (`sikafolio_gmail_email`); access token kept in memory only (short-lived, expires ~1 hour, must reconnect)
 - **Scheduled auto-sync** — removed; App.jsx is now a clean shell (session + screen routing + `usePrices`); auto-sync logic was extracted and is currently not active
 - **Paste-to-import** — fallback parser for raw email text copied from any client (no Gmail API needed)
-- **ImportScreenshotModal** (`src/components/ImportScreenshotModal.jsx`) — bottom-sheet modal for importing trades from iC Wealth Order History screenshots; OCR via Tesseract.js; parser (`parseTradeLiveText`) anchors on **card headers** (`"Buy 41 MTNGH"` / `"Sell 30 SIC"` pattern, no leading `\b` so OCR tab-bar merges like `"HistoryBuy 41 MTNGH"` are still caught), NOT on `"Order number"` — that field was unreliable for the first card in multi-card screenshots causing it to be silently dropped; each card block spans from its header anchor to the next; all fields extracted within the block: **date** from ordinal format (`"6th May 2026"`) to avoid matching the `"As of 10 May 2026"` page header (verified captured for all cards), orderType from header word, quantity from labeled body field with header fallback, estimated value from labeled body field; order number is nice-to-have for dedup but no longer required; fee auto-calculated at 2.5%; deduplication: `checkDuplicate()` checks `orderNumber` first, falls back to `emailId` (`screenshot_<orderNumber>` or `screenshot_<SYMBOL>_<date>_<qty>` when order number unreadable); saved with `source: 'screenshot'`
+- **ImportScreenshotModal** (`src/components/ImportScreenshotModal.jsx`) — bottom-sheet modal for importing trades from iC Wealth Order History screenshots; OCR via **Gemini API** (`api/ocr.js`, model `gemini-2.5-flash`); image is resized client-side to max 1600px and base64-encoded before sending; Gemini returns structured JSON directly (no regex parser needed); prompt instructs it to extract all trade cards with orderType, symbol, quantity, grossConsideration, date (YYYY-MM-DD), and orderNumber; fee auto-calculated at 2.5%; deduplication: `checkDuplicate()` checks `orderNumber` first, falls back to `emailId` (`screenshot_<orderNumber>` or `screenshot_<SYMBOL>_<date>_<qty>` when order number unreadable); saved with `source: 'screenshot'`
   - **Editable preview** — after OCR, each non-duplicate card shows a pencil icon (✏) to expand inline edit form with: Buy/Sell toggle, symbol input, date text input (dd/mm/yy format), shares + gross inputs; fee (2.5%), net, and price-per-share recalculate live; "Save changes" writes back to preview state recomputing all derived fields; Import button shows "Finish editing first" and is disabled while any card is open for editing; duplicate cards are dimmed and not editable
   - **Order number display** — shown in read-only card rows as `Order #XXXXXXXXX` (dim monospace, below the GHS + date line) and as a non-editable reference header inside the edit form; hidden if OCR couldn't read it; still used for deduplication
   - **Date format** — all dates shown as `dd/mm/yy` (e.g. `14/04/26`); edit form uses a `type="text"` input (not `type="date"`) with `toDisplayDate`/`fromDisplayDate` helpers converting between display format and internal `YYYY-MM-DD`; `executionDate` in draft state only updates when the full pattern is matched, so partial typing doesn't corrupt the stored value
@@ -37,12 +37,24 @@ The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys f
   - **Per company group header**: total position PnL shown below the share count — calculated as `(currentPrice − avgCost) × netShares` where `avgCost` is the WAC across all buys; consistent with `usePortfolio` logic; hidden if no live price or no remaining shares
   - **P&L consistency**: per-trade P&Ls are pre-computed inside `CompanyGroup` using the same `currentPrice` variable that drives the group header, then passed as a `pnl` prop to each `TradeRow` — this guarantees the sum of individual rows always equals the group total (no stale-render divergence)
   - Edit flow: code confirmed → `setEditing(trade)` opens `EditTradeModal`; Delete flow: code confirmed → `db.trades.delete(trade.id)`
-- **Settings screen** — shows real user avatar (or initial fallback), Gmail connect/disconnect, Sign out; last sync date and trade count; "Clear all portfolio data" button triggers `ConfirmCodeModal` (destructive) → on verify calls `db.trades.clear()` + deletes `lastSyncDate` from syncMeta
+- **Settings screen** (`Settings.jsx`) — redesigned with icon-chip rows grouped into glass cards by section:
+  - **Gmail sync section** — connected account row (shows email + green "Connected" badge if linked, reads `sikafolio_gmail_email` from localStorage), last synced date row (from `syncMeta`), "Rescan all history" row with trade count sub-label
+  - **iC Securities section** — "Direct broker sync" and "Import from statement" rows; both open a `ComingSoonModal` bottom sheet (gold icon, "Coming soon" copy, "Got it" dismiss); no functionality behind these yet
+  - **Data section** — "Export trades" row downloads all trades as a CSV (`sikafolio-trades-YYYY-MM-DD.csv`) via `exportCSV()`; "Notifications" row shows a "Soon" badge (non-tappable); "Clear all portfolio data" row (danger/red styling) triggers `ConfirmCodeModal`
+  - **Sign out** ghost button below the data section
+  - **About footer** — `SikaFolio v1.0.0` and `Prices: afx.kwayisi.org · GSE` as 11px dim microcopy; replaces the old Prices + Display info rows which were read-only clutter
+  - `SettingsRow` internal component: accepts `icon`, `label`, `sub`, `value`, `valueColor`, `onClick`, `chevron`, `danger` props; renders a 32px icon chip + text block + optional right value/chevron
 - **Markets page** (`Markets.jsx`) — lists all GSE-listed equities with company logo, full name, ticker, live price, absolute + percentage change (colour-coded green/red), and volume; shows GSE Composite Index card at top; header right shows market status chip (see below) that opens `PriceInfoSheet` on tap
 - **Market status chip** — appears in the top-right header of Portfolio and Markets pages; uses `isMarketOpen()` to show `● MARKET OPEN` (green tint, animated dot) or `● MARKET CLOSED` (muted, static grey dot) + `ⓘ` icon; tapping opens `PriceInfoSheet`
 - **PriceInfoSheet** (`src/components/PriceInfoSheet.jsx`) — bottom-sheet modal explaining price data context; states prices are official GSE closing prices (updated once after each session, 15:00 GMT), not real-time broker feed prices; shows source row (afx.kwayisi.org + last-updated time); backdrop tap or "Got it" button to dismiss; used by Portfolio and Markets
 - **Company logo system** — `CompanyLogo` component (`src/components/CompanyLogo.jsx`) with three-tier fallback: Clearbit full logo → Google S2 favicon → coloured letter avatar; accepts `size` prop (`"sm"` 32px / `"md"` 40px / `"lg"` 52px); import it anywhere a company logo is needed
 - **GSE company registry** (`src/constants/gseCompanies.js`) — single source of truth mapping every GSE ticker to `{ name, domain }`; `getCompany(symbol)` helper returns the entry or a sensible default; update this file when adding new tickers or correcting domains, not inside components
+- **News page** (`src/pages/News.jsx`) — 5th tab (`ti-news`); fetches Ghanaian financial news RSS feeds via `/api/news` Vercel proxy; two tabs: "Your stocks" (default) filters articles matching user's holdings, "All GSE news" shows everything:
+  - **Matching logic** — `buildSearchTerms(symbol)` generates search terms from `GSE_COMPANIES`: full name, first word, first two words, and the ticker itself (e.g. MTNGH → ["MTN Ghana", "MTN", "MTNGH"]); `articleMatchesSymbol()` checks title + description case-insensitively
+  - **NewsCard** — gold ticker chips for each matched holding, gold left-accent bar, headline (13px 600), description excerpt (3-line clamp), source + relative timestamp footer, full-page `<a>` link to article; accent bar only appears when the card matches a holding
+  - **States** — skeleton loading (4 placeholder cards), error state with retry button, empty state for "Your stocks" with escape hatch to "All GSE news"
+  - **Refresh** — header button with `.spinning` CSS animation while loading
+  - **Tab count badge** — "Your stocks · N" shows match count when non-zero
 
 ### What's not yet built (known gaps)
 - Push notifications / true background sync (scheduled sync only fires while the app is open)
@@ -140,15 +152,18 @@ Settlement Date:  Tue, 12 May, 2026
 
 ## Vercel API routes
 - `api/gse.js` — serverless function that proxies `https://afx.kwayisi.org/gse/` with a proper `User-Agent`; returns raw HTML with `Cache-Control: s-maxage=300`; avoids third-party CORS proxies in production
+- `api/news.js` — fetches RSS feeds from CitiBusinessNews (`citibusinessnews.com/feed/`), Myjoyonline Business (`myjoyonline.com/business/feed/`), and GhanaBusinessNews (`ghanabusinessnews.com/feed/`) in parallel via `Promise.allSettled`; parses XML with regex (handles CDATA + HTML entity decoding); caps at 60 articles sorted by pubDate; `Cache-Control: s-maxage=900` (15 min); returns `{ title, link, description, pubDate, source }[]`; partial failures are silently swallowed so one dead feed doesn't break the whole response; 8-second per-feed timeout via `AbortSignal.timeout(8000)`
+- `api/ocr.js` — receives `{ image: base64string, mimeType }` POST; calls `gemini-2.5-flash` via the Generative Language API with a structured prompt; returns `{ trades: [...] }` as parsed JSON; requires `GEMINI_API_KEY` env var (free tier: 1500 req/day at aistudio.google.com); 30-second timeout; must be tested via `vercel dev` (not `vite dev`) since Vite can't proxy to a local serverless function
 
 ## Vite config
 - Fixed port: `server: { port: 5173, strictPort: true }` — will error instead of silently switching ports
 - Dev proxy: `/api/gse` → `https://afx.kwayisi.org/gse/` so the same fetch path works in both dev and Vercel prod
+- `/api/ocr` and `/api/news` are **not** proxied by Vite — use `vercel dev` (port 3000) when testing screenshot import or the News page locally; `vite dev` (port 5173) is fine for everything else
 
 ## Icons
 - Tabler Icons loaded via CDN in `index.html`: `https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css`
 - Use class `ti ti-<name>` on `<i>` elements — no npm package needed
-- Common icons used: `ti-chart-pie` (portfolio), `ti-history` (trades), `ti-trending-up` (markets), `ti-settings` (settings), `ti-edit`, `ti-trash`, `ti-alert-circle`
+- Common icons used: `ti-chart-pie` (portfolio), `ti-history` (trades), `ti-trending-up` (markets), `ti-news` (news tab), `ti-settings` (settings), `ti-edit`, `ti-trash`, `ti-alert-circle`, `ti-mail`, `ti-refresh`, `ti-building-bank`, `ti-file-import`, `ti-download`, `ti-bell`, `ti-clock`
 
 ## Logo
 - The logo image is `src/assets/logo.jpg` (hand holding cash, black silhouette on white).
@@ -181,6 +196,7 @@ Settlement Date:  Tue, 12 May, 2026
 - All numbers use `'JetBrains Mono', ui-monospace, monospace`; all UI labels use `'Manrope', system-ui, sans-serif`
 - Body sets `background: var(--bg)` AND `background-image: var(--bg-grad)` (layered) — the gold radial ambient at top is the signature of the Glass Studio direction
 - Cards use `backdrop-filter: blur(20px)` — do not add drop shadows to cards; only `--gold-glow` goes on the primary button
+- `.spinning` utility class — `animation: spin 0.8s linear infinite` (keyframe defined in index.css); use on any `<i>` element for a loading spinner
 
 ## Dark theme rules (Glass Studio)
 

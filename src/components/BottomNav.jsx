@@ -2,6 +2,7 @@ const tabs = [
   { id: 'portfolio', icon: 'ti-chart-pie',   label: 'Portfolio' },
   { id: 'trades',    icon: 'ti-history',      label: 'Trades'    },
   { id: 'markets',   icon: 'ti-trending-up',  label: 'Markets'   },
+  { id: 'news',      icon: 'ti-news',         label: 'News'      },
   { id: 'settings',  icon: 'ti-settings',     label: 'Settings'  },
 ]
 

@@ -1,112 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { createWorker } from 'tesseract.js'
 import { db } from '../services/db'
 
 const IC_FEE_RATE = 0.025
 
-const MONTHS = {
-  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
-  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
-}
-
-// OCR commonly swaps l/I for 1 and O for 0 inside digit strings
-function fixOcrDigits(str) {
-  return str.replace(/[lI]/g, '1').replace(/[oO]/g, '0')
-}
-
-// Tesseract may use comma as decimal separator ("278,80") or drop the period entirely ("27880")
-function parseDecimal(str) {
-  const s = str.replace(/(\d),(\d{2})$/, '$1.$2').replace(/,/g, '')
-  return +s
-}
-
-function parseTradeLiveText(rawText) {
-  const results = []
-
-  // Anchor on card headers: "Buy 41 MTNGH" / "Sell 30 SIC".
-  // This is the largest, boldest text in each card and far more reliably OCR'd
-  // than "Order number XXXXXXX" — which can be misread for the first card in a
-  // multi-card screenshot, causing the first trade to be silently dropped.
-  // Each anchor marks the START of a card; everything to the next anchor is one block.
-  // No leading \b — handles OCR merging tab-bar text with the first card header,
-  // e.g. "...Dividend HistoryBuy 41 MTNGH..." where \b would fail before "Buy".
-  const headerRe = /(buy|sell)\s+([\d\w]{1,8})\s+([A-Z]{2,14})\b/gi
-  const anchors = []
-  let m
-  while ((m = headerRe.exec(rawText)) !== null) {
-    const rawQty = fixOcrDigits(m[2]).replace(/[^\d]/g, '')
-    const qty = +rawQty
-    if (!qty) continue  // "Buy/Sell  Buy" body row has no numeric quantity — skip it
-
-    // Strip status badge suffix OCR may have merged onto the symbol (e.g. "MTNGHCOMPLETE")
-    const rawSym = m[3].toUpperCase()
-      .replace(/COMPLETE$|CANCEL(LED)?$|PEND(ING)?$|FAIL(ED)?$/i, '').trim()
-    if (rawSym.length < 2 || rawSym.length > 10) continue
-
-    anchors.push({ rawOrderType: m[1], headerQty: qty, symbol: rawSym, index: m.index })
-  }
-  if (anchors.length === 0) return results
-
-  for (let k = 0; k < anchors.length; k++) {
-    const { rawOrderType, headerQty, symbol, index: aStart } = anchors[k]
-
-    // Card block: from this header to the next header's start (or end of text).
-    // All fields — date, order number, quantity, estimated value — are inside this block.
-    const blockEnd = k < anchors.length - 1 ? anchors[k + 1].index : rawText.length
-    const block = rawText.slice(aStart, blockEnd)
-
-    // Order type: from the header word (always "Buy" or "Sell")
-    const orderType = rawOrderType[0].toUpperCase() + rawOrderType.slice(1).toLowerCase()
-
-    // Date: first ordinal format in this block ("6th May 2026").
-    // Ordinal suffix avoids matching "As of 10 May 2026" in the page header.
-    let date = null
-    const ordM = block.match(/(\d{1,2})(?:st|nd|rd|th)\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i)
-    if (ordM) {
-      date = new Date(+ordM[3], MONTHS[ordM[2].toLowerCase()], +ordM[1]).toISOString().split('T')[0]
+// Resize image to max 1600px on longest side and return base64 JPEG string (no data-URL prefix).
+// Keeps file size well under Vercel's 4.5MB body limit.
+async function toBase64Resized(file, maxPx = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width  = Math.round(img.width  * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', 0.92).split(',')[1])
     }
-
-    // Order number: nice-to-have for dedup, but not required for parsing
-    const onM = block.match(/order\s*number\s*[:\s]*\s*([\d\w]{5,})/i)
-    const rawOrderNum = onM ? fixOcrDigits(onM[1]).replace(/[^\d]/g, '') : null
-    const orderNumber = rawOrderNum && rawOrderNum.length >= 6 ? rawOrderNum : null
-
-    // Quantity: prefer the labeled body field; fall back to value from the header
-    const qM  = block.match(/\bquantity\s*[:\s]*\s*([\d\w]+)/i)
-    const qty  = qM ? (+(fixOcrDigits(qM[1]).replace(/[^\d]/g, '')) || headerQty) : headerQty
-
-    // Estimated value: from labeled body field only — never bleeds from adjacent cards
-    const evM  = block.match(/estimated\s*value\s*[:\s]*\s*([\d,]+\.?\d*)/i)
-    let gross = evM ? parseDecimal(evM[1]) : null
-    // Tesseract sometimes drops the decimal point ("27880" instead of "278.80");
-    // if implied price per share is > GHS 200 it's almost certainly a 100× error
-    if (gross && qty > 0 && gross / qty > 200) gross = +(gross / 100).toFixed(2)
-
-    if (orderType && symbol && qty > 0 && date && gross > 0) {
-      const fee = +(gross * IC_FEE_RATE).toFixed(2)
-      const net = orderType === 'Buy' ? +(gross + fee).toFixed(2) : +(gross - fee).toFixed(2)
-      const emailId = orderNumber
-        ? `screenshot_${orderNumber}`
-        : `screenshot_${symbol}_${date}_${qty}`
-      results.push({
-        symbol,
-        orderType,
-        quantity: qty,
-        grossConsideration: gross,
-        processingFee: fee,
-        netConsideration: net,
-        pricePerShare: +(gross / qty).toFixed(4),
-        executionDate: date,
-        settlementDate: date,
-        orderNumber: orderNumber || undefined,
-        emailId,
-        source: 'screenshot',
-        status: 'COMPLETE',
-      })
-    }
-  }
-
-  return results
+    img.onerror = reject
+    img.src = url
+  })
 }
 
 async function checkDuplicate(trade) {
@@ -197,19 +111,61 @@ export default function ImportScreenshotModal({ onClose }) {
     setImgSrc(URL.createObjectURL(file))
 
     try {
-      const worker = await createWorker('eng', 1, {
-        logger: m => {
-          if (m.status === 'loading language traineddata') setProgress(m.progress * 0.1)
-          else if (m.status === 'recognizing text') setProgress(0.1 + m.progress * 0.9)
-        },
+      setProgress(0.2)
+      const image = await toBase64Resized(file)
+      setProgress(0.4)
+
+      const resp = await fetch('/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image, mimeType: 'image/jpeg' }),
       })
-      const { data: { text } } = await worker.recognize(file)
-      await worker.terminate()
+      setProgress(0.9)
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: `Server error ${resp.status}` }))
+        throw new Error(err.error || `Server error ${resp.status}`)
+      }
+
+      const { trades: rawTrades } = await resp.json()
       setProgress(1)
 
-      const trades = parseTradeLiveText(text)
-      if (trades.length === 0) {
+      if (!rawTrades?.length) {
         setError("No trades found. Make sure the screenshot shows the Order History tab with trade cards fully expanded.")
+        setPhase('idle')
+        return
+      }
+
+      const trades = rawTrades
+        .map(t => {
+          const gross = +t.grossConsideration || 0
+          const qty   = +t.quantity || 0
+          const fee   = +(gross * IC_FEE_RATE).toFixed(2)
+          const net   = t.orderType === 'Buy' ? +(gross + fee).toFixed(2) : +(gross - fee).toFixed(2)
+          const orderNumber = t.orderNumber ? String(t.orderNumber) : null
+          const emailId = orderNumber
+            ? `screenshot_${orderNumber}`
+            : `screenshot_${t.symbol}_${t.date}_${qty}`
+          return {
+            symbol:             (t.symbol || '').toUpperCase().trim(),
+            orderType:          t.orderType,
+            quantity:           qty,
+            grossConsideration: gross,
+            processingFee:      fee,
+            netConsideration:   net,
+            pricePerShare:      qty > 0 ? +(gross / qty).toFixed(4) : 0,
+            executionDate:      t.date,
+            settlementDate:     t.date,
+            orderNumber:        orderNumber || undefined,
+            emailId,
+            source:             'screenshot',
+            status:             'COMPLETE',
+          }
+        })
+        .filter(t => t.symbol && t.quantity > 0 && t.grossConsideration > 0 && t.executionDate)
+
+      if (!trades.length) {
+        setError("Gemini found data but some required fields were missing. Try a clearer screenshot with all card fields visible.")
         setPhase('idle')
         return
       }
@@ -220,7 +176,7 @@ export default function ImportScreenshotModal({ onClose }) {
       setPreview(withDup)
       setPhase('preview')
     } catch (err) {
-      setError(`Reading failed: ${err.message}`)
+      setError(`Analysis failed: ${err.message}`)
       setPhase('idle')
     }
   }
@@ -334,7 +290,7 @@ export default function ImportScreenshotModal({ onClose }) {
                 style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 8, marginBottom: 18, objectFit: 'contain' }}
               />
             )}
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>Reading with Tesseract…</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>Analyzing with Gemini AI…</div>
             <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 99, height: 4, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',

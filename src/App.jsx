@@ -3,6 +3,7 @@ import Splash from './pages/Splash'
 import Portfolio from './pages/Portfolio'
 import Trades from './pages/Trades'
 import Markets from './pages/Markets'
+import News from './pages/News'
 import Settings from './pages/Settings'
 import BottomNav from './components/BottomNav'
 import { usePrices } from './hooks/usePrices'
@@ -41,6 +42,7 @@ export default function App() {
         {screen === 'portfolio' && <Portfolio prices={prices} />}
         {screen === 'trades'    && <Trades prices={prices} />}
         {screen === 'markets'   && <Markets prices={prices} />}
+        {screen === 'news'      && <News />}
         {screen === 'settings'  && (
           <Settings
             user={user}

@@ -13,6 +13,8 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
+      // /api/ocr and /api/news are Vercel serverless functions — not proxyable here.
+      // Use `vercel dev` (port 3000) instead of `vite dev` when testing those locally.
     },
   },
   plugins: [

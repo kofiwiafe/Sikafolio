@@ -4,10 +4,150 @@ import { db } from '../services/db'
 import Logo from '../components/Logo'
 import ConfirmCodeModal from '../components/ConfirmCodeModal'
 
+const GMAIL_KEY = 'sikafolio_gmail_email'
+
+function ComingSoonModal({ title, onClose }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,0.6)',
+        display: 'flex', alignItems: 'flex-end',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%',
+          background: 'var(--surface-solid)',
+          borderTop: '1px solid var(--border)',
+          borderRadius: '20px 20px 0 0',
+          padding: '28px 24px 36px',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{
+          width: 48, height: 48, borderRadius: '50%',
+          background: 'rgba(240,194,94,0.1)',
+          border: '1px solid rgba(240,194,94,0.25)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 16px',
+        }}>
+          <i className="ti ti-clock" style={{ fontSize: 22, color: 'var(--gold)' }} />
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 24 }}>
+          This feature is coming soon. We're working on direct broker integration
+          to make importing trades even easier.
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            width: '100%', padding: '13px 0',
+            background: 'linear-gradient(180deg, #F0C25E 0%, #C99A38 100%)',
+            border: 'none', borderRadius: 'var(--r-md)',
+            fontFamily: 'var(--font-ui)', fontSize: 14, fontWeight: 600,
+            color: '#080A10', cursor: 'pointer',
+          }}
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function SectionHeader({ label }) {
+  return (
+    <div style={{
+      fontSize: 10, color: 'var(--dim)',
+      letterSpacing: '0.06em', textTransform: 'uppercase',
+      padding: '18px 20px 6px',
+    }}>
+      {label}
+    </div>
+  )
+}
+
+function SettingsRow({ icon, label, sub, value, valueColor, onClick, chevron = false, danger = false }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center',
+        padding: '13px 20px',
+        borderBottom: '1px solid var(--divider)',
+        cursor: onClick ? 'pointer' : 'default',
+        gap: 12,
+      }}
+    >
+      {icon && (
+        <div style={{
+          width: 32, height: 32, borderRadius: 10,
+          background: danger ? 'rgba(255,142,138,0.1)' : 'rgba(255,255,255,0.05)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <i className={`ti ${icon}`} style={{ fontSize: 16, color: danger ? 'var(--red)' : 'var(--muted)' }} />
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: danger ? 'var(--red)' : 'var(--text)' }}>{label}</div>
+        {sub && <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 2 }}>{sub}</div>}
+      </div>
+      {value !== undefined && (
+        <div className="mono" style={{ fontSize: 12, color: valueColor || 'var(--gold)', flexShrink: 0 }}>
+          {value}
+        </div>
+      )}
+      {chevron && (
+        <i className="ti ti-chevron-right" style={{ fontSize: 14, color: 'var(--dim)', flexShrink: 0 }} />
+      )}
+    </div>
+  )
+}
+
+function exportCSV(trades) {
+  const header = 'Date,Symbol,Type,Quantity,Gross (GHS),Fee (GHS),Net (GHS),Price/Share,Order Number,Source'
+  const rows = trades.map(t => [
+    (t.executionDate || '').slice(0, 10),
+    t.symbol,
+    t.orderType,
+    t.quantity,
+    t.grossConsideration,
+    t.processingFee,
+    t.netConsideration,
+    t.pricePerShare,
+    t.orderNumber || '',
+    t.source || '',
+  ].join(','))
+  const csv = [header, ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `sikafolio-trades-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function Settings({ user, onLogout }) {
   const [confirmClear, setConfirmClear] = useState(false)
+  const [showComingSoon, setShowComingSoon] = useState(false)
 
-  const trades = useLiveQuery(() => db.trades.count(), [])
+  const trades = useLiveQuery(() => db.trades.toArray(), [])
+  const tradeCount = trades?.length ?? 0
+  const gmailEmail = localStorage.getItem(GMAIL_KEY)
+
+  const lastSyncRaw = useLiveQuery(
+    () => db.syncMeta.get('lastSyncDate').then(r => r?.value ?? null),
+    []
+  )
+  const lastSyncLabel = lastSyncRaw
+    ? new Date(lastSyncRaw).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+    : null
 
   async function clearAllTrades() {
     await db.trades.clear()
@@ -15,114 +155,146 @@ export default function Settings({ user, onLogout }) {
     setConfirmClear(false)
   }
 
-  const rows = (section, items) => (
-    <div key={section}>
-      <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '14px 20px 6px' }}>
-        {section}
-      </div>
-      {items.map(item => (
-        <div key={item.label} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '13px 20px',
-          borderBottom: '1px solid var(--divider)',
-        }}>
-          <div>
-            <div style={{ fontSize: 13, color: 'var(--text)' }}>{item.label}</div>
-            {item.sub && <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 2 }}>{item.sub}</div>}
-          </div>
-          <div className="mono" style={{ fontSize: 12, color: 'var(--gold)' }}>{item.value}</div>
-        </div>
-      ))}
-    </div>
-  )
-
   return (
     <>
-    {confirmClear && (
-      <ConfirmCodeModal
-        title="Clear all portfolio data"
-        subtitle="This permanently deletes all trade records in the app. Your data on iC Wealth is not affected."
-        destructive
-        onVerified={clearAllTrades}
-        onCancel={() => setConfirmClear(false)}
-      />
-    )}
-    <div style={{ paddingBottom: 24 }}>
-      <div style={{ padding: '10px 20px 14px' }}>
-        <Logo />
-      </div>
+      {confirmClear && (
+        <ConfirmCodeModal
+          title="Clear all portfolio data"
+          subtitle="This permanently deletes all trade records in the app. Your data on iC Wealth is not affected."
+          destructive
+          onVerified={clearAllTrades}
+          onCancel={() => setConfirmClear(false)}
+        />
+      )}
+      {showComingSoon && (
+        <ComingSoonModal title="iC Securities Direct Sync" onClose={() => setShowComingSoon(false)} />
+      )}
 
-      {/* User avatar */}
-      <div style={{ padding: '4px 20px 20px', textAlign: 'center' }}>
-        {user?.avatar ? (
-          <img
-            src={user.avatar}
-            alt={user.name}
-            style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 8px', display: 'block' }}
+      <div style={{ paddingBottom: 32 }}>
+        <div style={{ padding: '10px 20px 14px' }}>
+          <Logo />
+        </div>
+
+        {/* User profile */}
+        <div style={{ padding: '4px 20px 20px', textAlign: 'center' }}>
+          {user?.avatar ? (
+            <img
+              src={user.avatar}
+              alt={user.name}
+              style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 10px', display: 'block' }}
+            />
+          ) : (
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%',
+              background: 'var(--gold)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 20, fontWeight: 700, color: 'var(--bg)',
+              margin: '0 auto 10px',
+            }}>
+              {(user?.name || 'U').charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>{user?.name || 'User'}</div>
+          <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 3 }}>{user?.email || ''}</div>
+        </div>
+
+        {/* Gmail sync */}
+        <SectionHeader label="Gmail sync" />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', margin: '0 16px' }}>
+          <SettingsRow
+            icon="ti-mail"
+            label={gmailEmail ? 'Connected account' : 'Connect Gmail'}
+            sub={gmailEmail || 'Import trades from iC Securities emails'}
+            value={gmailEmail ? 'Connected' : undefined}
+            valueColor="var(--green)"
+            chevron={!gmailEmail}
           />
-        ) : (
-          <div style={{
-            width: 52, height: 52, borderRadius: '50%',
-            background: 'var(--gold)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16, fontWeight: 700, color: 'var(--bg)',
-            margin: '0 auto 8px',
-          }}>
-            {(user?.name || 'U').charAt(0).toUpperCase()}
-          </div>
-        )}
-        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>{user?.name || 'User'}</div>
-        <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 2 }}>{user?.email || ''}</div>
+          {lastSyncLabel && (
+            <SettingsRow
+              icon="ti-refresh"
+              label="Last synced"
+              value={lastSyncLabel}
+              valueColor="var(--muted)"
+            />
+          )}
+          <SettingsRow
+            icon="ti-history"
+            label="Rescan all history"
+            sub={tradeCount > 0 ? `${tradeCount} trades on record` : 'No trades yet'}
+            chevron
+          />
+        </div>
+
+        {/* iC Securities */}
+        <SectionHeader label="iC Securities" />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', margin: '0 16px' }}>
+          <SettingsRow
+            icon="ti-building-bank"
+            label="Direct broker sync"
+            sub="Connect your iC Wealth account"
+            chevron
+            onClick={() => setShowComingSoon(true)}
+          />
+          <SettingsRow
+            icon="ti-file-import"
+            label="Import from statement"
+            sub="Upload a CSV or PDF statement"
+            chevron
+            onClick={() => setShowComingSoon(true)}
+          />
+        </div>
+
+        {/* Data */}
+        <SectionHeader label="Data" />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', margin: '0 16px' }}>
+          <SettingsRow
+            icon="ti-download"
+            label="Export trades"
+            sub="Download all trades as CSV"
+            chevron
+            onClick={() => trades?.length && exportCSV(trades)}
+            value={tradeCount > 0 ? `${tradeCount} trades` : undefined}
+            valueColor="var(--muted)"
+          />
+          <SettingsRow
+            icon="ti-bell"
+            label="Notifications"
+            sub="Price alerts and sync reminders"
+            value="Soon"
+            valueColor="var(--dim)"
+          />
+          <SettingsRow
+            icon="ti-trash"
+            label="Clear all portfolio data"
+            sub="Permanently deletes all local trade records"
+            danger
+            onClick={() => setConfirmClear(true)}
+          />
+        </div>
+
+        {/* Sign out */}
+        <div style={{ padding: '16px 16px 0' }}>
+          <button
+            onClick={onLogout}
+            style={{
+              width: '100%', padding: 13,
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-md)',
+              fontFamily: 'var(--font-ui)', fontSize: 13,
+              color: 'var(--dim)', cursor: 'pointer',
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+
+        {/* About footer */}
+        <div style={{ padding: '20px 20px 0', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: 'var(--dim)' }}>SikaFolio v1.0.0</span>
+          <span style={{ fontSize: 11, color: 'var(--dim)' }}>Prices: afx.kwayisi.org · GSE</span>
+        </div>
       </div>
-
-      {rows('Prices', [
-        { label: 'Price source',  sub: 'afx.kwayisi.org · free',   value: 'GSE API' },
-        { label: 'Refresh',       sub: 'Pauses outside market hrs', value: '5 min'  },
-        { label: 'Market hours',  sub: 'Mon–Fri 10:00–15:00 GMT',   value: 'GSE'    },
-      ])}
-
-      {rows('Display', [
-        { label: 'Currency',    value: 'GHS'  },
-        { label: 'Cost method', sub: 'Weighted average across all buys', value: 'WAC' },
-        { label: 'Trades',      value: String(trades || 0) },
-        { label: 'App version', value: '1.0.0' },
-      ])}
-
-      {/* Data section */}
-      <div style={{ padding: '14px 20px 6px', fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Data</div>
-      <div style={{ padding: '4px 20px 0' }}>
-        <button
-          onClick={() => setConfirmClear(true)}
-          style={{
-            width: '100%', padding: 12,
-            background: 'var(--red-dim)',
-            border: '1px solid var(--red-border)',
-            borderRadius: 'var(--r-md)',
-            fontFamily: 'var(--font-ui)', fontSize: 13,
-            color: 'var(--red)', cursor: 'pointer',
-          }}
-        >
-          Clear all portfolio data
-        </button>
-      </div>
-
-      {/* Sign out */}
-      <div style={{ padding: '12px 20px 0' }}>
-        <button
-          onClick={onLogout}
-          style={{
-            width: '100%', padding: 12,
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--r-md)',
-            fontFamily: 'var(--font-ui)', fontSize: 13,
-            color: 'var(--dim)', cursor: 'pointer',
-          }}
-        >
-          Sign out
-        </button>
-      </div>
-    </div>
     </>
   )
 }
