@@ -1,9 +1,13 @@
 import { db } from './db'
 
-const GSE_FALLBACK_PROXY = 'https://api.allorigins.win/get?url=' + encodeURIComponent('https://afx.kwayisi.org/gse/')
+const GSE_URL = 'https://afx.kwayisi.org/gse/'
+const CORS_PROXIES = [
+  `https://api.allorigins.win/get?url=${encodeURIComponent(GSE_URL)}`,
+  `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(GSE_URL)}`,
+]
 
 export async function fetchLatestPrices() {
-  // Try our own proxy route first (works in Vercel prod; Vite dev proxies it too)
+  // Try our own Vercel proxy first (tries direct + allorigins server-side)
   try {
     const res = await fetch('/api/gse')
     if (res.ok) {
@@ -16,20 +20,26 @@ export async function fetchLatestPrices() {
     }
   } catch { /* fall through */ }
 
-  // Fall back to allorigins CORS proxy
-  try {
-    const res  = await fetch(GSE_FALLBACK_PROXY)
-    const data = await res.json()
-    const prices = parseGSETable(data.contents)
-    if (Object.keys(prices).length > 0) {
-      await persistPrices(prices)
-      return prices
-    }
-  } catch { /* fall through */ }
+  // Client-side CORS proxy fallbacks
+  for (const proxyUrl of CORS_PROXIES) {
+    try {
+      const res = await fetch(proxyUrl)
+      if (!res.ok) continue
+      const text = await res.text()
+      // allorigins wraps response in JSON; codetabs returns raw HTML
+      let html = text
+      try { html = JSON.parse(text)?.contents ?? text } catch { /* raw html */ }
+      const prices = parseGSETable(html)
+      if (Object.keys(prices).length > 0) {
+        await persistPrices(prices)
+        return prices
+      }
+    } catch { /* try next */ }
+  }
 
-  // Last resort: Dexie cache
-const cached = await db.prices.toArray()
-  return Object.fromEntries(cached.map(p => [p.symbol, p]))
+  // Last resort: Dexie cache (filter out stale 0-price entries)
+  const cached = await db.prices.toArray()
+  return Object.fromEntries(cached.filter(p => p.price > 0).map(p => [p.symbol, p]))
 }
 
 async function persistPrices(prices) {

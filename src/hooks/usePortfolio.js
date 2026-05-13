@@ -35,10 +35,16 @@ export function usePortfolio(prices = {}) {
       const bookValue    = (totalCost + totalFees) * (netShares / totalBought)
 
       const priceInfo    = prices[symbol] || {}
-      const currentPrice = priceInfo.price || 0
-      const currentValue = netShares * currentPrice
+      const livePrice    = priceInfo.price > 0 ? priceInfo.price : 0
+      // Fall back to last buy price per share so balance never shows 0 when API is down
+      const lastBuyPrice = buys.reduce((last, t) =>
+        new Date(t.executionDate) > new Date(last.executionDate) ? t : last, buys[0]
+      ).pricePerShare || 0
+      const currentPrice  = livePrice || lastBuyPrice
+      const hasLivePrice  = livePrice > 0
+      const currentValue  = netShares * currentPrice
       const unrealizedPnL = currentValue - bookValue
-      const pnlPct       = bookValue > 0 ? (unrealizedPnL / bookValue) * 100 : 0
+      const pnlPct        = bookValue > 0 ? (unrealizedPnL / bookValue) * 100 : 0
 
       // Realized PnL from sells (sell price vs avg cost)
       const realizedPnL  = sells.reduce((s, t) => s + ((t.pricePerShare - avgCost) * t.quantity), 0)
@@ -54,6 +60,7 @@ export function usePortfolio(prices = {}) {
         bookValue,
         totalFees,
         currentPrice,
+        hasLivePrice,
         currentValue,
         unrealizedPnL,
         pnlPct,

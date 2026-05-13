@@ -25,7 +25,7 @@ function abbreviateName(name, maxLen = 22) {
 
 export default function StockCard({ holding }) {
   const { symbol, netShares, currentPrice, currentValue,
-          unrealizedPnL, pnlPct, changePercent } = holding
+          unrealizedPnL, pnlPct, changePercent, hasLivePrice } = holding
 
   const isUp  = unrealizedPnL >= 0
   const dayUp = changePercent >= 0
@@ -86,9 +86,13 @@ export default function StockCard({ holding }) {
               Price
             </div>
             <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentPrice)}</div>
-            <div className="mono" style={{ fontSize: 10, color: dayUp ? 'var(--green)' : 'var(--red)', marginTop: 2, whiteSpace: 'nowrap' }}>
-              {dayUp ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
-            </div>
+            {hasLivePrice ? (
+              <div className="mono" style={{ fontSize: 10, color: dayUp ? 'var(--green)' : 'var(--red)', marginTop: 2, whiteSpace: 'nowrap' }}>
+                {dayUp ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
+              </div>
+            ) : (
+              <div style={{ fontSize: 9, color: 'var(--dim)', marginTop: 2, whiteSpace: 'nowrap' }}>no live price</div>
+            )}
           </div>
         </div>
 
