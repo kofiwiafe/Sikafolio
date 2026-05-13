@@ -1,6 +1,6 @@
 # SikaFolio — Claude Preferences
 
-## App status (as of 2026-05-12, last updated 2026-05-13)
+## App status (as of 2026-05-13, last updated 2026-05-13)
 The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys from `master`).
 
 
@@ -18,15 +18,14 @@ The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys f
   - **Order number display** — shown in read-only card rows as `Order #XXXXXXXXX` (dim monospace, below the GHS + date line) and as a non-editable reference header inside the edit form; hidden if OCR couldn't read it; still used for deduplication
   - **Date format** — all dates shown as `dd/mm/yy` (e.g. `14/04/26`); edit form uses a `type="text"` input (not `type="date"`) with `toDisplayDate`/`fromDisplayDate` helpers converting between display format and internal `YYYY-MM-DD`; `executionDate` in draft state only updates when the full pattern is matched, so partial typing doesn't corrupt the stored value
 - **Local database** (`db.js`) — Dexie/IndexedDB; version 4 schema; see DB schema section for details
-- **Price service** (`priceService.js`) + `usePrices` hook — live GSE stock prices from afx.kwayisi.org via three-tier fetch chain: (1) `/api/gse` Vercel serverless proxy, (2) allorigins.win CORS proxy, (3) Dexie cache; polls every 5 min during market hours (Mon–Fri 10:00–15:00 GMT); parser captures symbol, name, price, change, changePercent, volume; skips non-ticker rows (only accepts 2–10 uppercase letters); after each successful fetch, upserts a daily `priceSnapshots` record to IndexedDB (used by portfolio history chart); `isMarketOpen()` is **exported** so UI components can use it directly
-- **Portfolio hook** (`usePortfolio.js`) — computes positions, WAC, unrealized PnL, realized PnL per holding; also totals `stocksSold` (sum of `grossConsideration` from ALL sell trades, including fully-sold positions) before the holdings filter so no sold cash is missed; re-runs reactively via `useLiveQuery`
+- **Price service** (`priceService.js`) + `usePrices` hook — live GSE stock prices from afx.kwayisi.org via four-tier fetch chain: (1) `/api/gse` Vercel serverless proxy (tries direct fetch + allorigins server-side), (2) allorigins.win client-side CORS proxy, (3) codetabs.com client-side CORS proxy, (4) Dexie cache (filtered to price > 0 only); polls every 5 min during market hours (Mon–Fri 10:00–15:00 GMT); parser captures symbol, name, price, change, changePercent, volume; skips non-ticker rows (only accepts 2–10 uppercase letters); after each successful fetch, upserts a daily `priceSnapshots` record to IndexedDB (used by portfolio history chart); `isMarketOpen()` is **exported** so UI components can use it directly; client-side proxies handle both JSON-wrapped (allorigins) and raw HTML (codetabs) responses
+- **Portfolio hook** (`usePortfolio.js`) — computes positions, WAC, unrealized PnL, realized PnL per holding; also totals `stocksSold` (sum of `grossConsideration` from ALL sell trades, including fully-sold positions) before the holdings filter so no sold cash is missed; re-runs reactively via `useLiveQuery`; when no live price is available (`prices[symbol]` absent or 0), falls back to `pricePerShare` from the most recent buy trade so Current Balance never shows 0; exposes `hasLivePrice: boolean` on each holding so UI can indicate stale/fallback pricing
 - **Portfolio history hook** (`usePortfolioHistory.js`) — returns `{ date, value }[]` sorted chronologically; merges trade settlement dates + price snapshot dates; replays trades per date to get shares held; prices from snapshot (preferred) or `pricePerShare` fallback; filters out zero-value points; **currently unused** (sparkline was removed)
 - **Portfolio page** (`Portfolio.jsx`) — hero card with two equal columns: left = "Current Balance" (GHS value, 28px mono) + day-over-day % badge (weighted `changePercent` across holdings, hidden when no prices); right = "Profit / Loss (P&L)" (GHS PnL in green/red, 28px mono); vertical border divider between columns; gold ambient blob top-right; four 2×2 stat cards below: **Invested | Fees paid | Stocks sold | Stocks held**; header right shows market status chip (see below) that opens `PriceInfoSheet` on tap
 - **Stocks sold stat** — total gross cash received from all sell trades ever (`summary.stocksSold`); not profit, just the money received; includes stocks fully sold (which are excluded from holdings)
-- **StockCard** (`src/components/StockCard.jsx`) — three-column holding card; left column (`flex:1`) + middle (fixed `width:110`) + right (fixed `width:100`) for consistent cross-card alignment:
+- **StockCard** (`src/components/StockCard.jsx`) — two-column flex holding card (left `flex:1`, right `flexShrink:0`):
   - Left column (stacked): top row = `CompanyLogo` (size="md") + ticker (gold, 15px bold) + share count + company name below; bottom row = "P&L" label + ▲/▼ value + (pct%) all inline
-  - Middle column: "Current value" label (no GHS prefix) + formatted value, centered
-  - Right column: "Current price" label (no GHS prefix) + price + daily ▲/▼ X.XX% (no "today"), right-aligned
+  - Right column (stacked, right-aligned): "Value" label + formatted value; "Price" label + price; daily ▲/▼ X.XX% — or `"no live price"` dim text when `hasLivePrice` is false
   - No "X purchases · avg GHS Y" line — that info is not shown on the card
 - **ConfirmCodeModal** (`src/components/ConfirmCodeModal.jsx`) — shared bottom-sheet modal for confirming destructive or sensitive actions; generates a random 4-digit code (1000–9999) via `useMemo` on mount, displays it large in accent color, requires exact match in a numeric input before enabling Confirm; `destructive` prop switches theme from gold to red; shake animation on wrong code entry; works identically for all user types (no DB lookup, no passcode required); used by Trades (edit + delete) and Settings (clear all data)
 - **AddTradeModal**, **EditTradeModal** — reusable UI components; `EditTradeModal` mirrors `AddTradeModal` but calls `db.trades.update(trade.id, …)` and pre-fills all fields from the existing trade record
@@ -115,14 +114,17 @@ Settlement Date:  Tue, 12 May, 2026
 - `forceFullScan`: deletes `lastSyncDate` AND clears only Gmail-sourced trades (`source !== 'manual'`) before re-importing — preserves manually entered trades; used by "Rescan all history" button
 - "Rescan all history" button shows whenever Gmail is connected and a prior sync exists (not just when trades.length === 0)
 - After sync, `lastSyncDate` saved to `syncMeta` table in IndexedDB
-- Scheduled auto-sync: `App.jsx` checks time every 60s and calls `syncTrades(accessToken, null)` silently at 6:00 and 12:00; only fires if token is in memory (no background sync when app is closed)
+- Scheduled auto-sync: removed; App.jsx is a clean shell (session + screen routing + `usePrices`); no polling or scheduled sync logic
 
 ### Portfolio calculation
 - `usePortfolio` groups trades by symbol, then by `orderType === 'Buy'` vs sell
 - WAC (weighted average cost) = total gross consideration / total shares bought
 - `netShares = totalBought - totalSold` — if ≤ 0, position is excluded from holdings
 - `stocksSold` is computed from raw `trades` BEFORE the holdings filter so fully-sold stocks are counted; it is the sum of `grossConsideration` on all sell trades (not profit)
-- PnL = `(currentPrice * netShares) - (avgCost * netShares)` using live GSE prices
+- `bookValue = (totalGross + totalFees) * (netShares / totalBought)` — includes buy fees so break-even reflects real cash outlay; this is what "Invested" and PnL are measured against
+- `currentPrice` = live price from API; falls back to `pricePerShare` of the most recent buy trade when no live price is available (so balance is never 0)
+- `hasLivePrice: boolean` on each holding — false when using the buy-price fallback; StockCard shows `"no live price"` instead of a day-change % in that case
+- PnL = `(currentPrice * netShares) - bookValue` using live GSE prices (or buy-price fallback)
 - Prices keyed by uppercase ticker symbol (e.g., `'MTNGH'`, `'SIC'`, `'GCB'`, `'CAL'`) — must match parsed trade symbols exactly
 
 ### DB schema (`db.js`)
@@ -151,7 +153,7 @@ Settlement Date:  Tue, 12 May, 2026
 - Labels above inputs (not placeholder-only) for sign-up fields
 
 ## Vercel API routes
-- `api/gse.js` — serverless function that proxies `https://afx.kwayisi.org/gse/` with a proper `User-Agent`; returns raw HTML with `Cache-Control: s-maxage=300`; avoids third-party CORS proxies in production
+- `api/gse.js` — serverless function that proxies `https://afx.kwayisi.org/gse/`; uses full Chrome browser headers (User-Agent, Sec-Fetch-*, Accept-Language, etc.) + 8s `AbortSignal` timeout on the direct fetch; if the direct fetch fails (e.g. afx.kwayisi.org blocks Vercel IPs), falls back to fetching via allorigins.win server-side before giving up; returns raw HTML with `Cache-Control: s-maxage=300`
 - `api/news.js` — fetches RSS feeds from CitiBusinessNews (`citibusinessnews.com/feed/`), Myjoyonline Business (`myjoyonline.com/business/feed/`), and GhanaBusinessNews (`ghanabusinessnews.com/feed/`) in parallel via `Promise.allSettled`; parses XML with regex (handles CDATA + HTML entity decoding); caps at 60 articles sorted by pubDate; `Cache-Control: s-maxage=900` (15 min); returns `{ title, link, description, pubDate, source }[]`; partial failures are silently swallowed so one dead feed doesn't break the whole response; 8-second per-feed timeout via `AbortSignal.timeout(8000)`
 - `api/ocr.js` — receives `{ image: base64string, mimeType }` POST; calls `gemini-2.5-flash` via the Generative Language API with a structured prompt; returns `{ trades: [...] }` as parsed JSON; requires `GEMINI_API_KEY` env var (free tier: 1500 req/day at aistudio.google.com); 30-second timeout; must be tested via `vercel dev` (not `vite dev`) since Vite can't proxy to a local serverless function
 
