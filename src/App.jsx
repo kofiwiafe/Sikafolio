@@ -39,7 +39,7 @@ export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {screen === 'portfolio' && <Portfolio prices={prices} />}
+        {screen === 'portfolio' && <Portfolio prices={prices} user={user} />}
         {screen === 'trades'    && <Trades prices={prices} />}
         {screen === 'markets'   && <Markets prices={prices} />}
         {screen === 'news'      && <News />}

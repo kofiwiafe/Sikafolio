@@ -98,30 +98,6 @@
     backdrop-filter: blur(20px);
   }
 
-  .badge-gold {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--gold-dim);
-    border: 1px solid var(--gold-border);
-    border-radius: var(--r-pill);
-    padding: 4px 10px;
-    font-size: 12px;
-    color: var(--gold);
-  }
-
-  .badge-green {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--green-dim);
-    border: 1px solid var(--green-border);
-    border-radius: var(--r-pill);
-    padding: 4px 10px;
-    font-size: 12px;
-    color: var(--green);
-  }
-
   /* Stat card — same glass treatment, tighter padding */
   .stat-card {
     position: relative;

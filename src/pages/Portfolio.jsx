@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import Logo from '../components/Logo'
 import StockCard from '../components/StockCard'
 import PriceInfoSheet from '../components/PriceInfoSheet'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { isMarketOpen } from '../hooks/usePrices'
 
-export default function Portfolio({ prices }) {
+function getGreeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+export default function Portfolio({ prices, user }) {
   const [showInfo, setShowInfo] = useState(false)
   const marketOpen = isMarketOpen()
   const { holdings, summary, loading } = usePortfolio(prices?.prices || {})
@@ -24,7 +30,10 @@ export default function Portfolio({ prices }) {
     <div style={{ paddingBottom: 16 }}>
       {/* App header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
-        <Logo />
+        <div>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600, color: 'var(--dim)', fontFamily: 'Manrope, system-ui, sans-serif' }}>{getGreeting()}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'Manrope, system-ui, sans-serif', lineHeight: 1.2 }}>{user?.name?.split(' ')[0] || 'there'}</div>
+        </div>
         <div
           role="button"
           onClick={() => setShowInfo(true)}

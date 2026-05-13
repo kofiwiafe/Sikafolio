@@ -45,13 +45,13 @@ export default function StockCard({ holding }) {
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       <div style={accentBar} />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingLeft: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, paddingLeft: 6 }}>
 
-        {/* Left: logo + ticker + shares + company on top, P&L below */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+        {/* Left: logo + ticker + shares + company, P&L below */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <CompanyLogo symbol={symbol} size="md" />
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
                 <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)', lineHeight: 1.2 }}>{symbol}</span>
                 <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
@@ -73,22 +73,22 @@ export default function StockCard({ holding }) {
           </div>
         </div>
 
-        {/* Middle: market value */}
-        <div style={{ textAlign: 'center', width: 110, flexShrink: 0 }}>
-          <div style={{ fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
-            Current value
+        {/* Right: value + price stacked (replaces two fixed-width columns) */}
+        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+              Value
+            </div>
+            <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentValue)}</div>
           </div>
-          <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentValue)}</div>
-        </div>
-
-        {/* Right: current price + daily change */}
-        <div style={{ textAlign: 'right', width: 100, flexShrink: 0 }}>
-          <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '0.05em', marginBottom: 2, textTransform: 'uppercase' }}>
-            Current price
-          </div>
-          <div className="mono" style={{ fontSize: 14, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentPrice)}</div>
-          <div className="mono" style={{ fontSize: 11, color: dayUp ? 'var(--green)' : 'var(--red)', marginTop: 3, whiteSpace: 'nowrap' }}>
-            {dayUp ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
+          <div>
+            <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '0.05em', marginBottom: 2, textTransform: 'uppercase' }}>
+              Price
+            </div>
+            <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentPrice)}</div>
+            <div className="mono" style={{ fontSize: 10, color: dayUp ? 'var(--green)' : 'var(--red)', marginTop: 2, whiteSpace: 'nowrap' }}>
+              {dayUp ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
+            </div>
           </div>
         </div>
 

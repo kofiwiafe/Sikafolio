@@ -1,6 +1,6 @@
 # SikaFolio — Claude Preferences
 
-## App status (as of 2026-05-12, last updated 2026-05-17)
+## App status (as of 2026-05-12, last updated 2026-05-13)
 The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys from `master`).
 
 
@@ -29,7 +29,7 @@ The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys f
   - Right column: "Current price" label (no GHS prefix) + price + daily ▲/▼ X.XX% (no "today"), right-aligned
   - No "X purchases · avg GHS Y" line — that info is not shown on the card
 - **ConfirmCodeModal** (`src/components/ConfirmCodeModal.jsx`) — shared bottom-sheet modal for confirming destructive or sensitive actions; generates a random 4-digit code (1000–9999) via `useMemo` on mount, displays it large in accent color, requires exact match in a numeric input before enabling Confirm; `destructive` prop switches theme from gold to red; shake animation on wrong code entry; works identically for all user types (no DB lookup, no passcode required); used by Trades (edit + delete) and Settings (clear all data)
-- **AddTradeModal**, **EditTradeModal**, **SyncPanel** — reusable UI components; `EditTradeModal` mirrors `AddTradeModal` but calls `db.trades.update(trade.id, …)` and pre-fills all fields from the existing trade record
+- **AddTradeModal**, **EditTradeModal** — reusable UI components; `EditTradeModal` mirrors `AddTradeModal` but calls `db.trades.update(trade.id, …)` and pre-fills all fields from the existing trade record
 - **AddTradeModal symbol combobox** (`AddTradeModal.jsx`) — Symbol field is a searchable combobox backed by `GSE_COMPANIES`; filters by ticker prefix OR company name (case-insensitive); dropdown shows "YOUR HOLDINGS" section (stocks with prior trades) first, then "ALL GSE STOCKS" below; section headers only appear when no search query is active; owned stocks queried reactively via `useLiveQuery(() => db.trades.orderBy('symbol').uniqueKeys(), [], [])`; blur/mousedown race condition avoided by using `onMouseDown` for item selection and `setTimeout(..., 150)` on `onBlur`
 - **AddTradeModal fee calculation** — `IC_FEE_RATE = 0.025` (2.5%) is a module-level constant; no manual fee input; `feeVal = +(gross * IC_FEE_RATE).toFixed(2)`; `net = gross + fee` for Buy, `gross - fee` for Sell; summary card shows 3-column Gross | Fee (2.5%) | Net layout when qty × price > 0
 - **Trades page** (`Trades.jsx`) — two levels of live PnL + edit/delete per trade row:

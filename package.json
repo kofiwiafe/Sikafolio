@@ -10,12 +10,10 @@
   },
   "dependencies": {
     "@react-oauth/google": "^0.12.1",
-    "axios": "^1.7.7",
     "dexie": "^4.0.8",
     "dexie-react-hooks": "^1.1.7",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tesseract.js": "^7.0.0"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

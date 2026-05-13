@@ -30,8 +30,9 @@ export function usePortfolio(prices = {}) {
 
       const totalCost    = buys.reduce((s, t) => s + t.grossConsideration, 0)
       const totalFees    = buys.reduce((s, t) => s + (t.processingFee || 0), 0)
-      const avgCost      = totalCost / totalBought          // WAC per share
-      const bookValue    = netShares * avgCost               // total cost basis
+      const avgCost      = totalCost / totalBought                        // WAC per share (gross, for display)
+      // Book value includes proportional buy fees so break-even reflects real cash outlay
+      const bookValue    = (totalCost + totalFees) * (netShares / totalBought)
 
       const priceInfo    = prices[symbol] || {}
       const currentPrice = priceInfo.price || 0

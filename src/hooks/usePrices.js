@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchLatestPrices } from '../services/priceService'
+import { db } from '../services/db'
 
 const POLL_INTERVAL = 5 * 60 * 1000 // 5 minutes
 
@@ -27,6 +28,14 @@ export function usePrices() {
   }
 
   useEffect(() => {
+    // Serve cached prices immediately so UI never shows 0 while network loads
+    db.prices.toArray().then(cached => {
+      if (cached.length > 0) {
+        setPrices(Object.fromEntries(cached.map(p => [p.symbol, p])))
+        setLoading(false)
+      }
+    })
+
     refresh()
 
     // Poll only during market hours, check every 5 min

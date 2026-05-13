@@ -28,8 +28,7 @@ export async function fetchLatestPrices() {
   } catch { /* fall through */ }
 
   // Last resort: Dexie cache
-  console.warn('All price fetches failed — serving cached data')
-  const cached = await db.prices.toArray()
+const cached = await db.prices.toArray()
   return Object.fromEntries(cached.map(p => [p.symbol, p]))
 }
 
