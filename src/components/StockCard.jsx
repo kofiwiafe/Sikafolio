@@ -45,7 +45,7 @@ export default function StockCard({ holding }) {
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       <div style={accentBar} />
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, paddingLeft: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 6 }}>
 
         {/* Left: logo + ticker + shares + company, P&L below */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
@@ -56,7 +56,7 @@ export default function StockCard({ holding }) {
                 <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--gold)', lineHeight: 1.2 }}>{symbol}</span>
                 <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
                   {netShares.toLocaleString()}
-                  <span style={{ fontSize: 10, color: 'var(--dim)', fontWeight: 400, marginLeft: 3 }}>shares</span>
+                  <span style={{ fontSize: 10, color: 'var(--dim)', fontWeight: 400, marginLeft: 3 }}>sh</span>
                 </span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, lineHeight: 1.2 }}>{companyName}</div>
@@ -68,32 +68,32 @@ export default function StockCard({ holding }) {
               {isUp ? '▲' : '▼'} {isUp ? '+' : ''}{fmt(unrealizedPnL)}
             </div>
             <div className="mono" style={{ fontSize: 10, color: isUp ? 'var(--green)' : 'var(--red)' }}>
-              ({isUp ? '+' : ''}{pnlPct.toFixed(1)}%)
+              ({Math.abs(pnlPct).toFixed(1)}%)
             </div>
           </div>
         </div>
 
-        {/* Right: value + price stacked (replaces two fixed-width columns) */}
+        {/* Center: value — flex:1 so it truly sits between left and right */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+            Value
+          </div>
+          <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentValue)}</div>
+        </div>
+
+        {/* Right: price + day change */}
         <div style={{ flexShrink: 0, textAlign: 'right' }}>
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
-              Value
-            </div>
-            <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentValue)}</div>
+          <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '0.05em', marginBottom: 2, textTransform: 'uppercase' }}>
+            Price
           </div>
-          <div>
-            <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '0.05em', marginBottom: 2, textTransform: 'uppercase' }}>
-              Price
+          <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentPrice)}</div>
+          {hasLivePrice ? (
+            <div className="mono" style={{ fontSize: 10, color: dayUp ? 'var(--green)' : 'var(--red)', marginTop: 2, whiteSpace: 'nowrap' }}>
+              {dayUp ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
             </div>
-            <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentPrice)}</div>
-            {hasLivePrice ? (
-              <div className="mono" style={{ fontSize: 10, color: dayUp ? 'var(--green)' : 'var(--red)', marginTop: 2, whiteSpace: 'nowrap' }}>
-                {dayUp ? '▲' : '▼'} {Math.abs(changePercent).toFixed(2)}%
-              </div>
-            ) : (
-              <div style={{ fontSize: 9, color: 'var(--dim)', marginTop: 2, whiteSpace: 'nowrap' }}>no live price</div>
-            )}
-          </div>
+          ) : (
+            <div style={{ fontSize: 9, color: 'var(--dim)', marginTop: 2, whiteSpace: 'nowrap' }}>no live price</div>
+          )}
         </div>
 
       </div>

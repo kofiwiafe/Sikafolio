@@ -32,3 +32,12 @@ db.version(4).stores({
   users: '++id, &email, name, passcode, avatar, provider',
   priceSnapshots: 'date',
 })
+
+// version 5: tradeId index for contract note import dedup
+db.version(5).stores({
+  trades: '++id, emailId, orderNumber, tradeId, symbol, orderType, quantity, grossConsideration, processingFee, netConsideration, pricePerShare, settlementDate, executionDate, status',
+  prices: 'symbol, price, change, changePercent, updatedAt',
+  syncMeta: 'key, value',
+  users: '++id, &email, name, passcode, avatar, provider',
+  priceSnapshots: 'date',
+})

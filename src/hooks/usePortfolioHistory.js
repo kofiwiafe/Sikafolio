@@ -14,13 +14,12 @@ export function usePortfolioHistory() {
   const snapshotMap = {}
   for (const s of snapshots) snapshotMap[s.date] = s.values
 
-  // Collect all meaningful dates (unique trade dates + snapshot dates)
+  // Only use real price snapshot dates — trade-date fallback points use purchase prices
+  // which produce wildly wrong period P&L (makes "1 month ago" look like buy-day value).
   const toDate = str => str?.slice(0, 10)
-  const tradeDates  = trades.map(t => toDate(t.settlementDate) || toDate(t.executionDate)).filter(Boolean)
-  const snapDates   = snapshots.map(s => s.date)
-  const allDates    = [...new Set([...tradeDates, ...snapDates])].sort()
+  const snapDates = snapshots.map(s => s.date)
 
-  return allDates.map(date => {
+  return snapDates.map(date => {
     // Compute holdings (shares + last trade price) up to this date
     const holdings = {}
     for (const t of trades) {

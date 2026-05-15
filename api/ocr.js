@@ -1,19 +1,18 @@
-const PROMPT = `This is a screenshot from the iC Wealth mobile app (a Ghana stock broker).
-It shows an Order History screen with trade cards on a dark glass UI.
+const PROMPT = `This is an iC Securities Contract Note screenshot — a single-trade confirmation document.
 
-Extract ALL trade cards visible. Each card has a large bold header like "Buy 41 MTNGH" or "Sell 30 SIC" (order type, quantity, stock symbol).
-
-Return ONLY a valid JSON array, no markdown, no explanation:
-[{"orderType":"Buy","symbol":"MTNGH","quantity":41,"grossConsideration":278.80,"date":"2026-05-06","orderNumber":"123456789"}]
+Extract the one trade shown. Return ONLY a valid JSON array with one object, no markdown, no explanation:
+[{"orderType":"Buy","symbol":"MTNGH","quantity":130,"grossConsideration":708.50,"fee":15.93,"date":"2026-04-07","settlementDate":"2026-04-10","orderNumber":"260680829","tradeId":"616424"}]
 
 Rules:
-- orderType: exactly "Buy" or "Sell"
-- symbol: 2-10 uppercase letters only — strip any "GSE ", "GSE." prefix
-- quantity: integer number of shares
-- grossConsideration: the number shown next to "Estimated Value" (GHS amount)
-- date: YYYY-MM-DD — convert ordinal dates like "6th May 2026" → "2026-05-06"
-- orderNumber: 6–9 digit string from the "Order number" field, or null if unreadable
-- Include ALL trade cards shown, even partial ones at the edge of the screen`
+- orderType: exactly "Buy" or "Sell" — read from the Description field (e.g. "Buy MTNGH" → "Buy")
+- symbol: 2-10 uppercase letters only — read from Description, strip any "GSE " or "GSE." prefix
+- quantity: integer from the Quantity field
+- grossConsideration: the Amount value in the trade table (NOT Net Consideration)
+- fee: the exact "Total Charges & Levies" value — do not estimate or calculate this
+- date: YYYY-MM-DD converted from Trade Date (e.g. "7/04/26" → "2026-04-07")
+- settlementDate: YYYY-MM-DD converted from Settlement Date, or null if missing
+- orderNumber: string from the "Order Number" field in the top details section, or null if unreadable
+- tradeId: string from the "Trade ID" field in the top details section (appears directly below or near Order Number), or null if unreadable — this is a short numeric ID, NOT the same as Order Number`
 
 async function readBody(req) {
   return new Promise((resolve, reject) => {

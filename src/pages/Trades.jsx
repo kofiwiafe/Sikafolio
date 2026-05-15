@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../services/db'
 import Logo from '../components/Logo'
 import CompanyLogo from '../components/CompanyLogo'
-import AddTradeModal from '../components/AddTradeModal'
 import EditTradeModal from '../components/EditTradeModal'
 import ImportScreenshotModal from '../components/ImportScreenshotModal'
 import ConfirmCodeModal from '../components/ConfirmCodeModal'
@@ -184,7 +183,6 @@ function CompanyGroup({ symbol, trades, onEdit, onDelete, currentPrice, isOpen, 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Trades({ prices }) {
-  const [showAdd,     setShowAdd]    = useState(false)
   const [showImport,  setShowImport] = useState(false)
   const [pendingAction, setPending]  = useState(null)
   const [editingTrade,  setEditing]  = useState(null)
@@ -227,7 +225,6 @@ export default function Trades({ prices }) {
 
   return (
     <>
-      {showAdd      && <AddTradeModal          onClose={() => setShowAdd(false)} />}
       {showImport   && <ImportScreenshotModal  onClose={() => setShowImport(false)} />}
       {editingTrade && <EditTradeModal trade={editingTrade} onClose={() => setEditing(null)} />}
 
@@ -249,37 +246,21 @@ export default function Trades({ prices }) {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
           <Logo />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => setShowImport(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--r-pill)', padding: '7px 13px',
-                fontSize: 12, fontWeight: 600, color: 'var(--muted)', cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <i className="ti ti-camera" style={{ fontSize: 14 }} aria-hidden="true" />
-              Import
-            </button>
-            <button
-              onClick={() => setShowAdd(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: 'var(--gold-grad)',
-                boxShadow: 'var(--gold-glow)',
-                border: 'none',
-                borderRadius: 'var(--r-pill)', padding: '7px 13px',
-                fontSize: 12, fontWeight: 600, color: '#080A10', cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <i className="ti ti-plus" style={{ fontSize: 14 }} aria-hidden="true" />
-              Add Trade
-            </button>
-          </div>
+          <button
+            onClick={() => setShowImport(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: 'var(--gold-grad)',
+              boxShadow: 'var(--gold-glow)',
+              border: 'none',
+              borderRadius: 'var(--r-pill)', padding: '7px 13px',
+              fontSize: 12, fontWeight: 600, color: '#080A10', cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <i className="ti ti-file-import" style={{ fontSize: 14 }} aria-hidden="true" />
+            Import
+          </button>
         </div>
 
         {/* Stats glass card — STOCKS · TRADES · BUYS · SELLS */}
@@ -313,7 +294,7 @@ export default function Trades({ prices }) {
         {symbols.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 48, color: 'var(--dim)', fontSize: 13, lineHeight: 1.7 }}>
             No trades yet.<br />
-            Tap <strong style={{ color: 'var(--gold)' }}>Add Trade</strong> to enter one manually.
+            Tap <strong style={{ color: 'var(--gold)' }}>Import</strong> to add from a Contract Note.
           </div>
         ) : (
           symbols.map(symbol => (

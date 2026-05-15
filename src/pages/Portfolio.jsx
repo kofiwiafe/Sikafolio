@@ -19,7 +19,6 @@ export default function Portfolio({ prices, user }) {
 
   const isUp = (summary?.totalPnL || 0) >= 0
 
-  // Day-over-day change: weighted average of each holding's daily % change by current value
   const hasPrices = Object.keys(prices?.prices || {}).length > 0
   const dayChangePct = hasPrices && summary?.totalValue > 0
     ? holdings.reduce((s, h) => s + h.currentValue * (h.changePercent || 0), 0) / summary.totalValue
@@ -53,10 +52,9 @@ export default function Portfolio({ prices, user }) {
         </div>
       </div>
 
-      {/* Hero card — two focal stats */}
+      {/* Hero card */}
       <div style={{ margin: '0 16px 14px', position: 'relative' }}>
         <div className="card" style={{ padding: '16px 20px 18px' }}>
-          {/* Gold ambient blob */}
           <div style={{
             position: 'absolute', top: 0, right: 0, width: 200, height: 150, pointerEvents: 'none',
             background: 'radial-gradient(circle, rgba(240,194,94,0.12) 0%, transparent 65%)',
@@ -88,7 +86,7 @@ export default function Portfolio({ prices, user }) {
             {/* Divider */}
             <div style={{ width: 1, background: 'var(--border)', margin: '2px 16px 0', flexShrink: 0 }} />
 
-            {/* Right: Unrealized Profit */}
+            {/* Right: P&L */}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>
                 Profit / Loss (P&L)
@@ -105,10 +103,10 @@ export default function Portfolio({ prices, user }) {
       {/* 2×2 stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8, padding: '0 16px 14px' }}>
         {[
-          { label: 'Invested',       value: `GHS ${fmt(summary?.totalCost || 0)}` },
-          { label: 'Fees paid',      value: `GHS ${fmt(summary?.totalFees || 0)}` },
-          { label: 'Stocks sold',    value: `GHS ${fmt(summary?.stocksSold || 0)}` },
-          { label: 'Stocks held',    value: `${summary?.positions || 0} stocks` },
+          { label: 'Invested',    value: `GHS ${fmt(summary?.totalCost || 0)}` },
+          { label: 'Fees paid',   value: `GHS ${fmt(summary?.totalFees || 0)}` },
+          { label: 'Stocks sold', value: `GHS ${fmt(summary?.stocksSold || 0)}` },
+          { label: 'Stocks held', value: `${summary?.positions || 0} stocks` },
         ].map(({ label, value }) => (
           <div key={label} className="stat-card">
             <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>
