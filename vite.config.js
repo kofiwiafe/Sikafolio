@@ -13,8 +13,12 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
-      // /api/ocr and /api/news are Vercel serverless functions — not proxyable here.
-      // Use `vercel dev` (port 3000) instead of `vite dev` when testing those locally.
+      '/api/trades':    { target: 'https://sikafolio.vercel.app', changeOrigin: true },
+      '/api/users':     { target: 'https://sikafolio.vercel.app', changeOrigin: true },
+      '/api/sync-meta': { target: 'https://sikafolio.vercel.app', changeOrigin: true },
+      '/api/ocr':       { target: 'https://sikafolio.vercel.app', changeOrigin: true },
+      '/api/news':      { target: 'https://sikafolio.vercel.app', changeOrigin: true },
+      '/api/summarize': { target: 'https://sikafolio.vercel.app', changeOrigin: true },
     },
   },
   plugins: [

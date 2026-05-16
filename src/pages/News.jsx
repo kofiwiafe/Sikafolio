@@ -51,6 +51,30 @@ function TickerChip({ symbol }) {
 }
 
 function NewsCard({ article, matchedSymbols }) {
+  const [summary, setSummary] = useState(null)
+  const [simplifying, setSimplifying] = useState(false)
+  const pl = matchedSymbols.length > 0 ? 4 : 0
+
+  async function simplify(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (simplifying || summary) return
+    setSimplifying(true)
+    try {
+      const res = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: article.title, description: article.description }),
+      })
+      const data = await res.json()
+      if (data.summary) setSummary(data.summary)
+    } catch {
+      // silently fail — original description stays visible
+    } finally {
+      setSimplifying(false)
+    }
+  }
+
   return (
     <a
       href={article.link}
@@ -78,7 +102,7 @@ function NewsCard({ article, matchedSymbols }) {
 
         {/* Ticker chips */}
         {matchedSymbols.length > 0 && (
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8, paddingLeft: matchedSymbols.length > 0 ? 4 : 0 }}>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8, paddingLeft: pl }}>
             {matchedSymbols.map(sym => <TickerChip key={sym} symbol={sym} />)}
           </div>
         )}
@@ -86,35 +110,72 @@ function NewsCard({ article, matchedSymbols }) {
         {/* Headline */}
         <div style={{
           fontSize: 13, fontWeight: 600, color: 'var(--text)',
-          lineHeight: 1.4, marginBottom: 6,
-          paddingLeft: matchedSymbols.length > 0 ? 4 : 0,
+          lineHeight: 1.4, marginBottom: 6, paddingLeft: pl,
         }}>
           {article.title}
         </div>
 
-        {/* Description */}
-        {article.description && (
+        {/* Original description — hidden once summary loads */}
+        {article.description && !summary && (
           <div style={{
             fontSize: 12, color: 'var(--muted)', lineHeight: 1.5,
-            marginBottom: 10,
+            marginBottom: 10, paddingLeft: pl,
             display: '-webkit-box', WebkitLineClamp: 3,
             WebkitBoxOrient: 'vertical', overflow: 'hidden',
-            paddingLeft: matchedSymbols.length > 0 ? 4 : 0,
           }}>
             {article.description}
+          </div>
+        )}
+
+        {/* Plain-English summary */}
+        {summary && (
+          <div style={{
+            fontSize: 12, color: 'var(--text)', lineHeight: 1.6,
+            marginBottom: 10, padding: '8px 10px',
+            background: 'rgba(240,194,94,0.07)',
+            border: '1px solid rgba(240,194,94,0.15)',
+            borderRadius: 8,
+          }}>
+            <span style={{
+              fontSize: 10, color: 'var(--gold)', fontWeight: 700,
+              letterSpacing: '0.05em', display: 'block', marginBottom: 4,
+              fontFamily: 'var(--font-ui)',
+            }}>
+              PLAIN ENGLISH
+            </span>
+            {summary}
           </div>
         )}
 
         {/* Footer */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          paddingLeft: matchedSymbols.length > 0 ? 4 : 0,
+          paddingLeft: pl,
         }}>
           <div style={{ fontSize: 11, color: 'var(--dim)' }}>
             {article.source} · {relativeTime(article.pubDate)}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600 }}>
-            Read full →
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {!summary && (
+              <button
+                onClick={simplify}
+                disabled={simplifying}
+                style={{
+                  background: 'none', border: 'none', padding: 0,
+                  cursor: simplifying ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  fontSize: 11, fontWeight: 600,
+                  color: simplifying ? 'var(--dim)' : 'var(--muted)',
+                  fontFamily: 'var(--font-ui)',
+                }}
+              >
+                <i className={`ti ti-wand${simplifying ? ' spinning' : ''}`} style={{ fontSize: 13 }} />
+                {simplifying ? 'Simplifying…' : 'Simplify'}
+              </button>
+            )}
+            <div style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600 }}>
+              Read full →
+            </div>
           </div>
         </div>
       </div>
