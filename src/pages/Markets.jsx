@@ -2,14 +2,16 @@ import { useState } from 'react'
 import Logo from '../components/Logo'
 import CompanyLogo from '../components/CompanyLogo'
 import PriceInfoSheet from '../components/PriceInfoSheet'
+import StockDetailScreen from '../components/StockDetailScreen'
 import { getCompany } from '../constants/gseCompanies'
 import { isMarketOpen } from '../hooks/usePrices'
 
 function fmtPrice(n) { return Number(n).toFixed(2) }
 function fmtVol(n)   { return Number(n).toLocaleString() }
 
-export default function Markets({ prices }) {
-  const [showInfo, setShowInfo] = useState(false)
+export default function Markets({ prices, user, trades }) {
+  const [showInfo,     setShowInfo]     = useState(false)
+  const [detailSymbol, setDetailSymbol] = useState(null)
   const marketOpen = isMarketOpen()
   const { prices: priceMap, updatedAt, loading, refresh } = prices || {}
 
@@ -17,8 +19,26 @@ export default function Markets({ prices }) {
     a[0].localeCompare(b[0])
   )
 
+  // trades for the selected symbol (may be empty if user doesn't hold it)
+  const detailTrades = detailSymbol
+    ? (trades || []).filter(t => t.symbol === detailSymbol)
+    : []
+
   return (
     <div style={{ paddingBottom: 80 }}>
+
+      {detailSymbol && (
+        <StockDetailScreen
+          symbol={detailSymbol}
+          userTrades={detailTrades}
+          currentPrice={priceMap?.[detailSymbol]?.price ?? null}
+          priceInfo={priceMap?.[detailSymbol] ?? null}
+          user={user}
+          onEdit={null}
+          onDelete={null}
+          onClose={() => setDetailSymbol(null)}
+        />
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
@@ -99,10 +119,12 @@ export default function Markets({ prices }) {
           return (
             <div
               key={symbol}
+              onClick={() => setDetailSymbol(symbol)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 12,
                 padding: '10px 16px',
                 borderBottom: '1px solid var(--divider)',
+                cursor: 'pointer', userSelect: 'none',
               }}
             >
               <CompanyLogo symbol={symbol} size="md" />
@@ -132,6 +154,8 @@ export default function Markets({ prices }) {
                   </div>
                 )}
               </div>
+
+              <i className="ti ti-chevron-right" style={{ fontSize: 14, color: 'var(--dim)', flexShrink: 0 }} />
             </div>
           )
         })

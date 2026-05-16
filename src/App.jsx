@@ -53,9 +53,10 @@ export default function App() {
             deleteTrade={tradesApi.deleteTrade}
             addTrades={tradesApi.addTrades}
             checkDuplicate={tradesApi.checkDuplicate}
+            user={user}
           />
         )}
-        {screen === 'markets'  && <Markets prices={prices} />}
+        {screen === 'markets'  && <Markets prices={prices} user={user} trades={tradesApi.trades} />}
         {screen === 'news'     && <News trades={tradesApi.trades} />}
         {screen === 'settings' && (
           <Settings

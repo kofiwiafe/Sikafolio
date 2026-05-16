@@ -9,19 +9,21 @@ function ComingSoonModal({ title, onClose }) {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 100,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex', alignItems: 'flex-end',
+        background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '0 20px',
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: '100%',
+          width: '100%', maxWidth: 400,
           background: 'var(--surface-solid)',
-          borderTop: '1px solid var(--border)',
-          borderRadius: '20px 20px 0 0',
-          padding: '28px 24px 36px',
+          border: '1px solid var(--border)',
+          borderRadius: 20,
+          padding: '28px 24px',
           textAlign: 'center',
+          animation: 'modal-in 0.28s cubic-bezier(0.22,1,0.36,1) both',
         }}
       >
         <div style={{

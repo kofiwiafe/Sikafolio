@@ -263,15 +263,17 @@ export default function ImportScreenshotModal({ onClose, addTrades, checkDuplica
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-end' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px' }}
       onClick={phase === 'idle' || phase === 'preview' ? onClose : undefined}
     >
       <div
         style={{
-          width: '100%', maxHeight: '90vh', overflowY: 'auto',
+          width: '100%', maxWidth: 480, maxHeight: '88vh', overflowY: 'auto',
           background: 'var(--surface-solid)',
-          borderRadius: '16px 16px 0 0',
-          padding: '24px 20px 48px',
+          borderRadius: 20,
+          border: '1px solid var(--border)',
+          padding: '24px 20px 28px',
+          animation: 'modal-in 0.28s cubic-bezier(0.22,1,0.36,1) both',
         }}
         onClick={e => e.stopPropagation()}
       >

@@ -20,8 +20,11 @@ function buildSearchTerms(symbol) {
 }
 
 function articleMatchesSymbol(article, terms) {
-  const haystack = (article.title + ' ' + article.description).toLowerCase()
-  return terms.some(t => haystack.includes(t.toLowerCase()))
+  const haystack = article.title + ' ' + article.description
+  return terms.some(t => {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(haystack)
+  })
 }
 
 function relativeTime(dateStr) {

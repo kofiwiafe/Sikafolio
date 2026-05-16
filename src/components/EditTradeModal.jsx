@@ -78,11 +78,11 @@ export default function EditTradeModal({ trade, trades, onClose, onUpdate }) {
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'flex-end' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px' }}
       onClick={onClose}
     >
       <div
-        style={{ width: '100%', maxHeight: '90vh', overflowY: 'auto', background: 'var(--surface-solid)', borderRadius: '16px 16px 0 0', padding: '20px 20px 48px' }}
+        style={{ width: '100%', maxWidth: 480, maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-solid)', borderRadius: 20, border: '1px solid var(--border)', padding: '20px 20px 28px', animation: 'modal-in 0.28s cubic-bezier(0.22,1,0.36,1) both' }}
         onClick={e => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>

@@ -45,7 +45,7 @@ export default function StockCard({ holding }) {
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       <div style={accentBar} />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingLeft: 6 }}>
 
         {/* Left: logo + ticker + shares + company, P&L below */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
@@ -73,16 +73,17 @@ export default function StockCard({ holding }) {
           </div>
         </div>
 
-        {/* Center: value — flex:1 so it truly sits between left and right */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        {/* Center: value */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
             Value
           </div>
           <div className="mono" style={{ fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(currentValue)}</div>
+          <div style={{ height: 14, flexShrink: 0 }} />
         </div>
 
         {/* Right: price + day change */}
-        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+        <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '0.05em', marginBottom: 2, textTransform: 'uppercase' }}>
             Price
           </div>

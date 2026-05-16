@@ -10,21 +10,26 @@ export default function PriceInfoSheet({ open, onClose, updatedAt }) {
   if (!open) return null
 
   return (
-    <>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 199,
+        background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '0 20px',
+      }}
+    >
       <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 199 }}
-      />
-      <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 200,
-        background: 'var(--surface-solid)',
-        border: '1px solid var(--border)',
-        borderBottom: 'none',
-        borderRadius: '20px 20px 0 0',
-        padding: '16px 20px 40px',
-      }}>
-        <div style={{ width: 36, height: 4, background: 'var(--border)', borderRadius: 2, margin: '0 auto 20px' }} />
-
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 440,
+          background: 'var(--surface-solid)',
+          border: '1px solid var(--border)',
+          borderRadius: 20,
+          padding: '24px 20px',
+          animation: 'modal-in 0.28s cubic-bezier(0.22,1,0.36,1) both',
+        }}
+      >
         <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 14 }}>
           About price data
         </div>
@@ -72,6 +77,6 @@ export default function PriceInfoSheet({ open, onClose, updatedAt }) {
           Got it
         </button>
       </div>
-    </>
+    </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import StockCard from '../components/StockCard'
 import PriceInfoSheet from '../components/PriceInfoSheet'
+import TopPerformers from '../components/TopPerformers'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { isMarketOpen } from '../hooks/usePrices'
 
@@ -29,9 +30,9 @@ export default function Portfolio({ prices, user, trades, tradesLoading }) {
     <div style={{ paddingBottom: 16 }}>
       {/* App header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
-        <div>
-          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600, color: 'var(--dim)', fontFamily: 'Manrope, system-ui, sans-serif' }}>{getGreeting()}</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'Manrope, system-ui, sans-serif', lineHeight: 1.2 }}>{user?.name?.split(' ')[0] || 'there'}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', fontFamily: 'Manrope, system-ui, sans-serif', lineHeight: 1 }}>{getGreeting()},</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', fontFamily: 'Manrope, system-ui, sans-serif', lineHeight: 1 }}>{user?.name?.split(' ')[0] || 'there'}</div>
         </div>
         <div
           role="button"
@@ -54,68 +55,69 @@ export default function Portfolio({ prices, user, trades, tradesLoading }) {
 
       {/* Hero card */}
       <div style={{ margin: '0 16px 14px', position: 'relative' }}>
-        <div className="card" style={{ padding: '16px 20px 18px' }}>
+        <div className="card" style={{ padding: '22px 20px 0' }}>
           <div style={{
-            position: 'absolute', top: 0, right: 0, width: 200, height: 150, pointerEvents: 'none',
-            background: 'radial-gradient(circle, rgba(240,194,94,0.12) 0%, transparent 65%)',
+            position: 'absolute', top: 0, right: 0, width: 240, height: 180, pointerEvents: 'none',
+            background: 'radial-gradient(circle, rgba(240,194,94,0.14) 0%, transparent 65%)',
           }} />
 
-          <div style={{ display: 'flex', gap: 0 }}>
+          <div style={{ display: 'flex', gap: 0, paddingBottom: 22 }}>
             {/* Left: Current Balance */}
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 12, color: 'var(--text)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8, fontFamily: 'Manrope, system-ui, sans-serif', fontWeight: 600 }}>
                 Current Balance
               </div>
-              <div className="mono" style={{ fontSize: 28, fontWeight: 500, color: 'var(--text)', lineHeight: 1.1, letterSpacing: '-1px' }}>
-                <span style={{ fontSize: 13, color: 'var(--muted)', letterSpacing: 0, fontWeight: 400 }}>GHS </span>
+              <div className="mono" style={{ fontSize: 15, color: 'var(--muted)', letterSpacing: 0, fontWeight: 400, marginBottom: 2 }}>GHS</div>
+              <div className="mono" style={{ fontSize: 38, fontWeight: 500, color: 'var(--text)', lineHeight: 1, letterSpacing: '-1.5px' }}>
                 {fmt(summary?.totalValue || 0)}
               </div>
-              {dayChangePct !== null && (
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8,
-                  background: dayIsUp ? 'var(--green-dim)' : 'var(--red-dim)',
-                  border: `1px solid ${dayIsUp ? 'var(--green-border)' : 'var(--red-border)'}`,
-                  borderRadius: 'var(--r-pill)', padding: '3px 9px', fontSize: 11,
-                  color: dayIsUp ? 'var(--green)' : 'var(--red)',
-                }}>
-                  <span className="mono">{dayIsUp ? '▲' : '▼'} {Math.abs(dayChangePct).toFixed(1)}% today</span>
-                </div>
-              )}
             </div>
 
             {/* Divider */}
-            <div style={{ width: 1, background: 'var(--border)', margin: '2px 16px 0', flexShrink: 0 }} />
+            <div style={{ width: 1, background: 'var(--border)', margin: '2px 18px 0', flexShrink: 0 }} />
 
             {/* Right: P&L */}
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 12, color: 'var(--text)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8, fontFamily: 'Manrope, system-ui, sans-serif', fontWeight: 600 }}>
                 Profit / Loss (P&L)
               </div>
-              <div className="mono" style={{ fontSize: 28, fontWeight: 500, color: isUp ? 'var(--green)' : 'var(--red)', lineHeight: 1.1, letterSpacing: '-1px' }}>
-                <span style={{ fontSize: 13, letterSpacing: 0, fontWeight: 400 }}>GHS </span>
+              <div className="mono" style={{ fontSize: 15, color: 'var(--muted)', letterSpacing: 0, fontWeight: 400, marginBottom: 2 }}>GHS</div>
+              <div className="mono" style={{ fontSize: 38, fontWeight: 500, lineHeight: 1, letterSpacing: '-1.5px', color: isUp ? 'var(--green)' : 'var(--red)' }}>
                 {summary ? (isUp ? '+' : '') + fmt(summary.totalPnL) : '0.00'}
               </div>
             </div>
           </div>
+
+          {/* Footnote stats row */}
+          <div style={{
+            display: 'flex', borderTop: '1px solid rgba(255,255,255,0.04)',
+            margin: '0 -20px', padding: '8px 20px 10px',
+          }}>
+            {[
+              { label: 'Invested',    value: `GHS ${fmt(summary?.totalCost || 0)}` },
+              { label: 'Fees paid',   value: `GHS ${fmt(summary?.totalFees || 0)}` },
+              { label: 'Stocks sold', value: `GHS ${fmt(summary?.stocksSold || 0)}` },
+              { label: 'Stocks held', value: `${summary?.positions || 0} stocks` },
+            ].map(({ label, value }, i, arr) => (
+              <div key={label} style={{
+                flex: 1, display: 'flex', flexDirection: 'column', gap: 2,
+                paddingLeft: i > 0 ? 10 : 0,
+                borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                marginLeft: i > 0 ? 10 : 0,
+              }}>
+                <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: 'Manrope, system-ui, sans-serif', opacity: 0.7 }}>
+                  {label}
+                </div>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* 2×2 stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8, padding: '0 16px 14px' }}>
-        {[
-          { label: 'Invested',    value: `GHS ${fmt(summary?.totalCost || 0)}` },
-          { label: 'Fees paid',   value: `GHS ${fmt(summary?.totalFees || 0)}` },
-          { label: 'Stocks sold', value: `GHS ${fmt(summary?.stocksSold || 0)}` },
-          { label: 'Stocks held', value: `${summary?.positions || 0} stocks` },
-        ].map(({ label, value }) => (
-          <div key={label} className="stat-card">
-            <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>
-              {label}
-            </div>
-            <div className="mono" style={{ fontSize: 13, color: 'var(--text)' }}>{value}</div>
-          </div>
-        ))}
-      </div>
+      <TopPerformers holdings={holdings} />
 
       <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0 20px', marginBottom: 8 }}>
         Holdings

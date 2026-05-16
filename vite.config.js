@@ -19,6 +19,7 @@ export default defineConfig({
       '/api/ocr':       { target: 'https://sikafolio.vercel.app', changeOrigin: true },
       '/api/news':      { target: 'https://sikafolio.vercel.app', changeOrigin: true },
       '/api/summarize': { target: 'https://sikafolio.vercel.app', changeOrigin: true },
+      '/api/comments':  { target: 'https://sikafolio.vercel.app', changeOrigin: true },
     },
   },
   plugins: [
