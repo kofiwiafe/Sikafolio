@@ -1,6 +1,6 @@
 # SikaFolio — Claude Preferences
 
-## App status (as of 2026-05-16, last updated 2026-05-16)
+## App status (as of 2026-05-16, last updated 2026-05-16, sync deployed 2026-05-16)
 The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys from `master`).
 
 ### What's built
@@ -132,11 +132,23 @@ API responses map snake_case DB columns → camelCase for the frontend.
 - `api/gse.js` — proxies `https://afx.kwayisi.org/gse/`; uses full Chrome browser headers + 8s `AbortSignal` timeout on the direct fetch; falls back to allorigins.win server-side before giving up; returns raw HTML with `Cache-Control: s-maxage=300`
 - `api/news.js` — fetches RSS feeds from CitiBusinessNews, Myjoyonline Business, and GhanaBusinessNews in parallel via `Promise.allSettled`; parses XML with regex (handles CDATA + HTML entity decoding); caps at 60 articles sorted by pubDate; `Cache-Control: s-maxage=900` (15 min); returns `{ title, link, description, pubDate, source }[]`; partial failures are silently swallowed; 8-second per-feed timeout via `AbortSignal.timeout(8000)`
 - `api/ocr.js` — receives `{ image: base64string, mimeType }` POST; calls `gemini-2.5-flash` via the Generative Language API with a structured prompt; returns `{ trades: [...] }` as parsed JSON; requires `GEMINI_API_KEY` env var (free tier: 1500 req/day at aistudio.google.com); 30-second timeout; must be tested via `vercel dev` (not `vite dev`) since Vite can't proxy to a local serverless function
+- `api/ping.js` — `GET` only; runs `SELECT 1` against Neon and returns `{ ok: true, ts: ISO }` or 500; used by the cron-job.org keep-alive job (every 5 min) to prevent Neon compute from suspending
 
 ## Vite config
 - Fixed port: `server: { port: 5173, strictPort: true }` — will error instead of silently switching ports
 - Dev proxy: `/api/gse` → `https://afx.kwayisi.org/gse/` so the same fetch path works in both dev and Vercel prod
 - `/api/ocr`, `/api/news`, `/api/trades`, `/api/users`, `/api/sync-meta` are **not** proxied by Vite — use `vercel dev` (port 3000) when testing these locally; `vite dev` (port 5173) is fine for UI-only work
+
+## vercel.json
+- `vercel.json` contains a single SPA rewrite: all non-`/api/` paths → `/index.html`
+- **Do not use `vercel dev` for UI work** — the rewrite intercepts Vite's internal module requests (`/@vite/client`, `/src/...`) and returns `index.html` instead, causing a blank white page; this is a `vercel dev` limitation, not a production bug
+- In production Vercel serves static files from `dist/` before checking rewrites, so the rewrite only fires for unknown routes (correct SPA behaviour)
+- For local development: `npm run dev` (Vite on port 5173) for UI; `vercel dev` (port 3000) only when you need to exercise API routes
+
+## Keep-alive / Neon
+- Neon free tier suspends compute after ~5 min of inactivity
+- cron-job.org job "sikafolio" pings `https://sikafolio.vercel.app/api/ping` every 5 minutes to keep the DB warm
+- `DATABASE_URL` is set in Vercel environment variables (Production + Preview)
 
 ## Icons
 - Tabler Icons loaded via CDN in `index.html`: `https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css`
