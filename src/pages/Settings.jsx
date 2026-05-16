@@ -1,10 +1,7 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../services/db'
 import Logo from '../components/Logo'
 import ConfirmCodeModal from '../components/ConfirmCodeModal'
 
-const GMAIL_KEY = 'sikafolio_gmail_email'
 
 function ComingSoonModal({ title, onClose }) {
   return (
@@ -133,25 +130,14 @@ function exportCSV(trades) {
   URL.revokeObjectURL(url)
 }
 
-export default function Settings({ user, onLogout }) {
-  const [confirmClear, setConfirmClear] = useState(false)
+export default function Settings({ user, onLogout, trades, clearAllTrades, refetchTrades }) {
+  const [confirmClear, setConfirmClear]     = useState(false)
   const [showComingSoon, setShowComingSoon] = useState(false)
 
-  const trades = useLiveQuery(() => db.trades.toArray(), [])
   const tradeCount = trades?.length ?? 0
-  const gmailEmail = localStorage.getItem(GMAIL_KEY)
 
-  const lastSyncRaw = useLiveQuery(
-    () => db.syncMeta.get('lastSyncDate').then(r => r?.value ?? null),
-    []
-  )
-  const lastSyncLabel = lastSyncRaw
-    ? new Date(lastSyncRaw).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
-    : null
-
-  async function clearAllTrades() {
-    await db.trades.clear()
-    await db.syncMeta.delete('lastSyncDate')
+  async function handleClearAll() {
+    await clearAllTrades()
     setConfirmClear(false)
   }
 
@@ -162,7 +148,7 @@ export default function Settings({ user, onLogout }) {
           title="Clear all portfolio data"
           subtitle="This permanently deletes all trade records in the app. Your data on iC Wealth is not affected."
           destructive
-          onVerified={clearAllTrades}
+          onVerified={handleClearAll}
           onCancel={() => setConfirmClear(false)}
         />
       )}
@@ -196,33 +182,6 @@ export default function Settings({ user, onLogout }) {
           )}
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>{user?.name || 'User'}</div>
           <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 3 }}>{user?.email || ''}</div>
-        </div>
-
-        {/* Gmail sync */}
-        <SectionHeader label="Gmail sync" />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', margin: '0 16px' }}>
-          <SettingsRow
-            icon="ti-mail"
-            label={gmailEmail ? 'Connected account' : 'Connect Gmail'}
-            sub={gmailEmail || 'Import trades from iC Securities emails'}
-            value={gmailEmail ? 'Connected' : undefined}
-            valueColor="var(--green)"
-            chevron={!gmailEmail}
-          />
-          {lastSyncLabel && (
-            <SettingsRow
-              icon="ti-refresh"
-              label="Last synced"
-              value={lastSyncLabel}
-              valueColor="var(--muted)"
-            />
-          )}
-          <SettingsRow
-            icon="ti-history"
-            label="Rescan all history"
-            sub={tradeCount > 0 ? `${tradeCount} trades on record` : 'No trades yet'}
-            chevron
-          />
         </div>
 
         {/* iC Securities */}
@@ -266,7 +225,7 @@ export default function Settings({ user, onLogout }) {
           <SettingsRow
             icon="ti-trash"
             label="Clear all portfolio data"
-            sub="Permanently deletes all local trade records"
+            sub="Permanently deletes all trade records"
             danger
             onClick={() => setConfirmClear(true)}
           />

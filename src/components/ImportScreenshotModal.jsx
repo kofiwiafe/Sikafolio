@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { db } from '../services/db'
 
 // Fix common OCR digit mis-reads: l/I→1, O→0
 function fixDigits(s) {
@@ -86,20 +85,6 @@ function parseContractNote(rawText) {
   return { orderType, symbol, quantity, grossConsideration, fee, date, settlementDate, orderNumber, tradeId }
 }
 
-async function checkDuplicate(trade) {
-  if (trade.tradeId) {
-    const hit = await db.trades.where('tradeId').equals(trade.tradeId).first()
-    // tradeId is unique per fill — if it doesn't match, it's not a duplicate
-    // (same orderNumber just means a partial fill of the same order)
-    return !!hit
-  }
-  if (trade.orderNumber) {
-    const hit = await db.trades.where('orderNumber').equals(trade.orderNumber).first()
-    if (hit) return true
-  }
-  const hit = await db.trades.where('emailId').equals(trade.emailId).first()
-  return !!hit
-}
 
 const fmt     = n => n?.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = s => {
@@ -121,7 +106,7 @@ const fromDisplayDate = s => {
   return `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
 }
 
-export default function ImportScreenshotModal({ onClose }) {
+export default function ImportScreenshotModal({ onClose, addTrades, checkDuplicate }) {
   const [phase,      setPhase]      = useState('idle')
   const [progress,   setProgress]   = useState(0)
   const [preview,    setPreview]    = useState([])
@@ -245,7 +230,7 @@ export default function ImportScreenshotModal({ onClose }) {
       }
 
       setProgress(1)
-      const isDuplicate = await checkDuplicate(trade)
+      const isDuplicate = checkDuplicate(trade.tradeId, trade.orderNumber, trade.emailId)
       setPreview([{ trade, isDuplicate }])
       setPhase('preview')
     } catch (err) {
@@ -256,7 +241,7 @@ export default function ImportScreenshotModal({ onClose }) {
 
   async function importTrades() {
     setPhase('importing')
-    await db.trades.bulkAdd(preview.filter(p => !p.isDuplicate).map(p => p.trade))
+    await addTrades(preview.filter(p => !p.isDuplicate).map(p => p.trade))
     setPhase('done')
   }
 

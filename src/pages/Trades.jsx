@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../services/db'
 import Logo from '../components/Logo'
 import CompanyLogo from '../components/CompanyLogo'
 import EditTradeModal from '../components/EditTradeModal'
@@ -182,7 +180,7 @@ function CompanyGroup({ symbol, trades, onEdit, onDelete, currentPrice, isOpen, 
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function Trades({ prices }) {
+export default function Trades({ prices, trades, tradesLoading, updateTrade, deleteTrade, addTrades, checkDuplicate }) {
   const [showImport,  setShowImport] = useState(false)
   const [pendingAction, setPending]  = useState(null)
   const [editingTrade,  setEditing]  = useState(null)
@@ -191,8 +189,6 @@ export default function Trades({ prices }) {
   function toggleSymbol(sym) {
     setOpenSymbol(s => s === sym ? null : sym)
   }
-
-  const trades = useLiveQuery(() => db.trades.orderBy('executionDate').reverse().toArray(), [])
 
   const bySymbol = {}
   for (const t of (trades || [])) {
@@ -215,7 +211,7 @@ export default function Trades({ prices }) {
     const action = pendingAction
     setPending(null)
     if (action.type === 'delete') {
-      await db.trades.delete(action.trade.id)
+      await deleteTrade(action.trade.id)
     } else {
       setEditing(action.trade)
     }
@@ -225,8 +221,8 @@ export default function Trades({ prices }) {
 
   return (
     <>
-      {showImport   && <ImportScreenshotModal  onClose={() => setShowImport(false)} />}
-      {editingTrade && <EditTradeModal trade={editingTrade} onClose={() => setEditing(null)} />}
+      {showImport   && <ImportScreenshotModal onClose={() => setShowImport(false)} addTrades={addTrades} checkDuplicate={checkDuplicate} />}
+      {editingTrade && <EditTradeModal trade={editingTrade} trades={trades} onClose={() => setEditing(null)} onUpdate={updateTrade} />}
 
       {pa && (
         <ConfirmCodeModal

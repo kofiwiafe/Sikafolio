@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import Logo from '../components/Logo'
 import { useGoogleLogin } from '@react-oauth/google'
-import { db } from '../services/db'
 
 const GoogleG = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
@@ -51,14 +50,14 @@ export default function Splash({ onEnter }) {
     if (val.length < 3) { setUsernameStatus('idle'); return }
     setUsernameStatus('checking')
     const timer = setTimeout(async () => {
-      const existing = await db.users.where('email').equals(val).first()
-      setUsernameStatus(existing ? 'taken' : 'available')
+      const res = await fetch(`/api/users?email=${encodeURIComponent(val)}`)
+      setUsernameStatus(res.ok ? 'taken' : 'available')
     }, 500)
     return () => clearTimeout(timer)
   }, [username, mode])
 
   const googleLogin = useGoogleLogin({
-    scope: 'openid email profile https://www.googleapis.com/auth/gmail.readonly',
+    scope: 'openid email profile',
     onSuccess: async (res) => {
       setLoading(true)
       setError(null)
@@ -67,10 +66,11 @@ export default function Splash({ onEnter }) {
           headers: { Authorization: `Bearer ${res.access_token}` },
         })
         const info = await r.json()
-        const existing = await db.users.where('email').equals(info.email).first()
-        if (!existing) {
-          await db.users.add({ email: info.email, name: info.name, avatar: info.picture, provider: 'google' })
-        }
+        await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: info.email, name: info.name, avatar: info.picture, provider: 'google' }),
+        })
         onEnter({ email: info.email, name: info.name, avatar: info.picture, accessToken: res.access_token })
       } catch {
         setError('Google sign-in failed. Please try again.')
@@ -86,12 +86,13 @@ export default function Splash({ onEnter }) {
     if (!username.trim()) { setError('Please enter your username'); return }
     setLoading(true)
     try {
-      const user = await db.users.where('email').equals(username.trim()).first()
-      if (!user || user.provider !== 'local') {
+      const res  = await fetch(`/api/users?email=${encodeURIComponent(username.trim())}`)
+      const data = await res.json()
+      if (!res.ok || !data.user || data.user.provider !== 'local') {
         setError('No account found with that username')
         return
       }
-      setFoundUser(user)
+      setFoundUser(data.user)
       setMode('login-pass')
     } catch {
       setError('Something went wrong. Please try again.')
@@ -128,10 +129,15 @@ export default function Splash({ onEnter }) {
     if (passcode !== confirmPasscode) { setError('Passcodes do not match'); return }
     setLoading(true)
     try {
-      const existing = await db.users.where('email').equals(username.trim()).first()
-      if (existing) { setError('That username is already taken'); return }
+      // Final availability check before committing
+      const check = await fetch(`/api/users?email=${encodeURIComponent(username.trim())}`)
+      if (check.ok) { setError('That username is already taken'); return }
       const name = `${firstName.trim()} ${lastName.trim()}`
-      await db.users.add({ email: username.trim(), name, passcode: passcode.trim(), avatar: null, provider: 'local' })
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: username.trim(), name, passcode: passcode.trim(), avatar: null, provider: 'local' }),
+      })
       onEnter({ email: username.trim(), name, avatar: null, accessToken: null })
     } catch {
       setError('Something went wrong. Please try again.')

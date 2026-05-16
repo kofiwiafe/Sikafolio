@@ -1,6 +1,4 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../services/db'
 import { GSE_COMPANIES } from '../constants/gseCompanies'
 import Logo from '../components/Logo'
 import CompanyLogo from '../components/CompanyLogo'
@@ -142,22 +140,18 @@ function Skeleton() {
   )
 }
 
-export default function News() {
+export default function News({ trades }) {
   const [articles, setArticles]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [tab, setTab]             = useState('mine') // 'mine' | 'all'
   const [lastFetched, setLastFetched] = useState(null)
 
-  // All symbols the user has ever traded
-  const heldSymbols = useLiveQuery(
-    () => db.trades.orderBy('symbol').uniqueKeys(),
-    [], []
-  )
+  // All unique symbols the user has traded, derived from prop
+  const heldSymbols = useMemo(() => [...new Set((trades || []).map(t => t.symbol))], [trades])
 
   // Map each held symbol to its search terms
   const symbolTerms = useMemo(() => {
-    if (!heldSymbols) return {}
     return Object.fromEntries(heldSymbols.map(sym => [sym, buildSearchTerms(sym)]))
   }, [heldSymbols])
 

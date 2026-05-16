@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../services/db'
 import { GSE_COMPANIES } from '../constants/gseCompanies'
 
 const ALL_TICKERS = Object.entries(GSE_COMPANIES).sort(([a], [b]) => a.localeCompare(b))
@@ -18,7 +16,7 @@ const lbl = { fontSize: 11, color: 'var(--dim)', marginBottom: 4, display: 'bloc
 
 const fmt = (n) => n?.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export default function EditTradeModal({ trade, onClose }) {
+export default function EditTradeModal({ trade, trades, onClose, onUpdate }) {
   const [symbol, setSymbol]       = useState(trade.symbol || '')
   const [orderType, setOrderType] = useState(trade.orderType || 'Buy')
   const [date, setDate]           = useState(trade.settlementDate || new Date().toISOString().split('T')[0])
@@ -29,8 +27,7 @@ export default function EditTradeModal({ trade, onClose }) {
   const [symOpen, setSymOpen]     = useState(false)
   const [saving, setSaving]       = useState(false)
 
-  const ownedSymbols = useLiveQuery(() => db.trades.orderBy('symbol').uniqueKeys(), [], [])
-  const ownedSet = new Set(ownedSymbols || [])
+  const ownedSet = new Set((trades || []).map(t => t.symbol))
 
   const sortedTickers = [
     ...ALL_TICKERS.filter(([t]) => ownedSet.has(t)),
@@ -64,7 +61,7 @@ export default function EditTradeModal({ trade, onClose }) {
   async function handleSave() {
     if (!canSave) return
     setSaving(true)
-    await db.trades.update(trade.id, {
+    await onUpdate(trade.id, {
       symbol: symbol.toUpperCase().trim(),
       orderType,
       quantity: parseFloat(qty),

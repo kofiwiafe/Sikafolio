@@ -11,10 +11,10 @@ function getGreeting() {
   return 'Good evening'
 }
 
-export default function Portfolio({ prices, user }) {
+export default function Portfolio({ prices, user, trades, tradesLoading }) {
   const [showInfo, setShowInfo] = useState(false)
   const marketOpen = isMarketOpen()
-  const { holdings, summary, loading } = usePortfolio(prices?.prices || {})
+  const { holdings, summary, loading } = usePortfolio(trades, prices?.prices || {})
   const fmt = (n) => n?.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   const isUp = (summary?.totalPnL || 0) >= 0
@@ -130,7 +130,7 @@ export default function Portfolio({ prices, user }) {
       ) : holdings.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--dim)', fontSize: 13, lineHeight: 1.7 }}>
           No trades yet.<br />
-          Go to <strong style={{ color: 'var(--gold)' }}>Trades</strong> tab and connect Gmail to import.
+          Go to <strong style={{ color: 'var(--gold)' }}>Trades</strong> tab and import a contract note to get started.
         </div>
       ) : (
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>

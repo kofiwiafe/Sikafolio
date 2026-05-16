@@ -7,6 +7,7 @@ import News from './pages/News'
 import Settings from './pages/Settings'
 import BottomNav from './components/BottomNav'
 import { usePrices } from './hooks/usePrices'
+import { useTrades } from './hooks/useTrades'
 
 const SESSION_KEY = 'sikafolio_session'
 
@@ -15,9 +16,10 @@ function getStoredSession() {
 }
 
 export default function App() {
-  const [user, setUser] = useState(getStoredSession)
+  const [user, setUser]     = useState(getStoredSession)
   const [screen, setScreen] = useState(() => getStoredSession() ? 'portfolio' : 'splash')
-  const prices = usePrices()
+  const prices  = usePrices()
+  const tradesApi = useTrades(user?.email)
 
   function handleLogin(userInfo) {
     const profile = { email: userInfo.email, name: userInfo.name, avatar: userInfo.avatar }
@@ -39,14 +41,29 @@ export default function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {screen === 'portfolio' && <Portfolio prices={prices} user={user} />}
-        {screen === 'trades'    && <Trades prices={prices} />}
-        {screen === 'markets'   && <Markets prices={prices} />}
-        {screen === 'news'      && <News />}
-        {screen === 'settings'  && (
+        {screen === 'portfolio' && (
+          <Portfolio prices={prices} user={user} trades={tradesApi.trades} tradesLoading={tradesApi.loading} />
+        )}
+        {screen === 'trades' && (
+          <Trades
+            prices={prices}
+            trades={tradesApi.trades}
+            tradesLoading={tradesApi.loading}
+            updateTrade={tradesApi.updateTrade}
+            deleteTrade={tradesApi.deleteTrade}
+            addTrades={tradesApi.addTrades}
+            checkDuplicate={tradesApi.checkDuplicate}
+          />
+        )}
+        {screen === 'markets'  && <Markets prices={prices} />}
+        {screen === 'news'     && <News trades={tradesApi.trades} />}
+        {screen === 'settings' && (
           <Settings
             user={user}
             onLogout={handleLogout}
+            trades={tradesApi.trades}
+            clearAllTrades={tradesApi.clearAllTrades}
+            refetchTrades={tradesApi.refetch}
           />
         )}
       </div>

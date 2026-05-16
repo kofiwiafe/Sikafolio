@@ -1,55 +1,52 @@
 # SikaFolio — Claude Preferences
 
-## App status (as of 2026-05-15, last updated 2026-05-15)
+## App status (as of 2026-05-16, last updated 2026-05-16)
 The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys from `master`).
-
-
 
 ### What's built
 - **Splash / Auth screen** (`Splash.jsx`) — two-step login (username → passcode), industry-standard sign-up (first name, last name, username with live availability check, passcode, confirm passcode), Google OAuth, session persistence via localStorage
 - **6 screens** — Portfolio, Trades, Markets, News, Settings, with a persistent BottomNav (5 tabs; nav button padding 8px to accommodate)
-- **Gmail sync** (`gmailService.js`) — OAuth via `@react-oauth/google`; fetches all iC Securities trade notification emails (`from:noreply@ic.africa subject:"Trade Notification" in:anywhere`), parses them, deduplicates by emailId, stores in IndexedDB; incremental syncs after first run using `after:<unix_timestamp>`
-- **Gmail confirmation flow** — after OAuth, Settings shows a confirmation card with the Gmail email address before committing; on confirm, app auto-navigates to Trades and auto-starts sync
-- **Gmail state persistence** — confirmed Gmail email persisted to localStorage (`sikafolio_gmail_email`); access token kept in memory only (short-lived, expires ~1 hour, must reconnect)
-- **Scheduled auto-sync** — removed; App.jsx is now a clean shell (session + screen routing + `usePrices`); auto-sync logic was extracted and is currently not active
-- **Paste-to-import** — fallback parser for raw email text copied from any client (no Gmail API needed)
-- **ImportScreenshotModal** (`src/components/ImportScreenshotModal.jsx`) — bottom-sheet modal for importing trades from iC Securities Contract Note screenshots (one trade per note); OCR via **Gemini API** (`api/ocr.js`, model `gemini-2.5-flash`); image is resized client-side to max 1600px and base64-encoded before sending; Gemini returns structured JSON directly (no regex parser needed); prompt extracts: `orderType`, `symbol`, `quantity`, `grossConsideration`, `fee` (exact "Total Charges & Levies" — never estimated), `date` (Trade Date), `settlementDate`, `orderNumber`, `tradeId`; `executionDate` is set to `settlementDate` (falls back to Trade Date) for consistency with Gmail imports; saved with `source: 'contract_note'`; deduplication: `checkDuplicate()` — if `tradeId` is present, checks only `tradeId` and returns immediately (match = duplicate, no match = not duplicate, stops here); this is critical because iC Securities reuses the same `orderNumber` across partial fills of one order, so falling through to `orderNumber` would wrongly flag a second fill as a duplicate; `orderNumber` check only runs when `tradeId` is absent; final fallback is `emailId` (`screenshot_<orderNumber>` or `screenshot_<SYMBOL>_<date>_<qty>`)
+- **ImportScreenshotModal** (`src/components/ImportScreenshotModal.jsx`) — bottom-sheet modal for importing trades from iC Securities Contract Note screenshots (one trade per note); OCR via **Gemini API** (`api/ocr.js`, model `gemini-2.5-flash`); image is resized client-side to max 1600px and base64-encoded before sending; Gemini returns structured JSON directly (no regex parser needed); prompt extracts: `orderType`, `symbol`, `quantity`, `grossConsideration`, `fee` (exact "Total Charges & Levies" — never estimated), `date` (Trade Date), `settlementDate`, `orderNumber`, `tradeId`; `executionDate` is set to `settlementDate` (falls back to Trade Date); saved with `source: 'contract_note'`; deduplication: `checkDuplicate(tradeId, orderNumber, emailId)` is a **synchronous** function passed in from `useTrades` that checks against the in-memory trades array — if `tradeId` is present, checks only `tradeId` and returns immediately (match = duplicate, no match = not duplicate, stops here); this is critical because iC Securities reuses the same `orderNumber` across partial fills of one order, so falling through to `orderNumber` would wrongly flag a second fill as a duplicate; `orderNumber` check only runs when `tradeId` is absent; final fallback is `emailId` (`screenshot_<orderNumber>` or `screenshot_<SYMBOL>_<date>_<qty>`)
   - **Editable preview** — after OCR, each non-duplicate card shows a pencil icon (✏) to expand inline edit form with: Buy/Sell toggle, symbol input, date text input (dd/mm/yy format), shares + gross + **charges (GHS)** inputs (fee is editable, not derived); net and price-per-share recalculate live from actual fee; "Save changes" writes back to preview state; Import button shows "Finish editing first" and is disabled while any card is open for editing; duplicate cards are dimmed and not editable
   - **Read-only card** — shows `GHS {gross} · Charges {fee} · {date}` and `Order #{orderNumber} · Trade ID {tradeId}` (dim monospace); fields hidden individually if OCR couldn't read them
   - **Date format** — all dates shown as `dd/mm/yy` (e.g. `14/04/26`); edit form uses a `type="text"` input (not `type="date"`) with `toDisplayDate`/`fromDisplayDate` helpers converting between display format and internal `YYYY-MM-DD`; `executionDate` in draft state only updates when the full pattern is matched, so partial typing doesn't corrupt the stored value
   - **Post-import flow** — done screen shows "Import another" (resets modal to idle) + "Done" (closes); enables back-to-back contract note imports without reopening the sheet
-- **Local database** (`db.js`) — Dexie/IndexedDB; version 4 schema; see DB schema section for details
+  - Props: `onClose`, `addTrades` (from `useTrades`), `checkDuplicate` (from `useTrades`)
+- **Cloud database** — Neon serverless Postgres (via `@neondatabase/serverless`); connection string in `DATABASE_URL` env var; three tables: `users`, `trades`, `sync_meta`; schema in `sql/schema.sql`; all user data syncs across devices automatically
+- **Local cache** (`src/services/db.js`) — Dexie/IndexedDB v6; **only** stores `prices` and `priceSnapshots` (local price cache); `users`, `trades`, `syncMeta` were removed from IndexedDB in v6 (migrated to Neon)
+- **Trade state** (`src/hooks/useTrades.js`) — fetches all trades for the logged-in user from `/api/trades`; holds them in React state at the App level; provides `addTrade`, `addTrades`, `updateTrade`, `deleteTrade`, `deleteTradesBySource`, `clearAllTrades`, `checkDuplicate`; passed as props down to Portfolio, Trades, Settings, News; no more `useLiveQuery` anywhere in the trade flow
 - **Price service** (`priceService.js`) + `usePrices` hook — live GSE stock prices from afx.kwayisi.org via four-tier fetch chain: (1) `/api/gse` Vercel serverless proxy (tries direct fetch + allorigins server-side), (2) allorigins.win client-side CORS proxy, (3) codetabs.com client-side CORS proxy, (4) Dexie cache (filtered to price > 0 only); polls every 5 min during market hours (Mon–Fri 10:00–15:00 GMT); parser captures symbol, name, price, change, changePercent, volume; skips non-ticker rows (only accepts 2–10 uppercase letters); after each successful fetch, upserts a daily `priceSnapshots` record to IndexedDB (used by portfolio history chart); `isMarketOpen()` is **exported** so UI components can use it directly; client-side proxies handle both JSON-wrapped (allorigins) and raw HTML (codetabs) responses
-- **Portfolio hook** (`usePortfolio.js`) — computes positions, WAC, unrealized PnL, realized PnL per holding; also totals `stocksSold` (sum of `grossConsideration` from ALL sell trades, including fully-sold positions) before the holdings filter so no sold cash is missed; re-runs reactively via `useLiveQuery`; when no live price is available (`prices[symbol]` absent or 0), falls back to `pricePerShare` from the most recent buy trade so Current Balance never shows 0; exposes `hasLivePrice: boolean` on each holding so UI can indicate stale/fallback pricing
-- **Portfolio history hook** (`usePortfolioHistory.js`) — returns `{ date, value }[]` sorted chronologically; merges trade settlement dates + price snapshot dates; replays trades per date to get shares held; prices from snapshot (preferred) or `pricePerShare` fallback; filters out zero-value points; **currently unused** (sparkline was removed)
-- **Portfolio page** (`Portfolio.jsx`) — hero card with two equal columns: left = "Current Balance" (GHS value, 28px mono) + day-over-day % badge (weighted `changePercent` across holdings, hidden when no prices); right = "Profit / Loss (P&L)" (GHS PnL in green/red, 28px mono); vertical border divider between columns; gold ambient blob top-right; four 2×2 stat cards below: **Invested | Fees paid | Stocks sold | Stocks held**; header right shows market status chip (see below) that opens `PriceInfoSheet` on tap
+- **Portfolio hook** (`usePortfolio.js`) — **pure computation function** (not a hook with DB access); takes `(trades, prices)` as arguments; computes positions, WAC, unrealized PnL, realized PnL per holding; totals `stocksSold` from ALL sell trades before the holdings filter; when no live price is available, falls back to `pricePerShare` of the most recent buy; exposes `hasLivePrice: boolean` on each holding
+- **Portfolio history hook** (`usePortfolioHistory.js`) — returns `{ date, value }[]`; **currently unused** (sparkline was removed); still references Dexie `db.trades` so do not import it without updating first
+- **Portfolio page** (`Portfolio.jsx`) — hero card with two equal columns: left = "Current Balance" (GHS value, 28px mono) + day-over-day % badge (weighted `changePercent` across holdings, hidden when no prices); right = "Profit / Loss (P&L)" (GHS PnL in green/red, 28px mono); vertical border divider between columns; gold ambient blob top-right; four 2×2 stat cards below: **Invested | Fees paid | Stocks sold | Stocks held**; header right shows market status chip (see below) that opens `PriceInfoSheet` on tap; receives `trades` + `tradesLoading` as props
 - **Stocks sold stat** — total gross cash received from all sell trades ever (`summary.stocksSold`); not profit, just the money received; includes stocks fully sold (which are excluded from holdings)
 - **StockCard** (`src/components/StockCard.jsx`) — three-column flex holding card:
   - Left column (`flex:1`, stacked): top row = `CompanyLogo` (size="md") + ticker (gold, 15px bold) + share count + company name below; bottom row = "P&L" label + ▲/▼ value + (pct%) all inline
   - Center column (`flex:1`, column + `alignItems:center`): "Value" label + formatted GHS value; sits in the true middle of the card between left and right
   - Right column (`flexShrink:0`, right-aligned): "Price" label + price; daily ▲/▼ X.XX% — or `"no live price"` dim text when `hasLivePrice` is false
   - No "X purchases · avg GHS Y" line — that info is not shown on the card
-- **ConfirmCodeModal** (`src/components/ConfirmCodeModal.jsx`) — shared bottom-sheet modal for confirming destructive or sensitive actions; generates a random 4-digit code (1000–9999) via `useMemo` on mount, displays it large in accent color, requires exact match in a numeric input before enabling Confirm; `destructive` prop switches theme from gold to red; shake animation on wrong code entry; works identically for all user types (no DB lookup, no passcode required); used by Trades (edit + delete) and Settings (clear all data)
-- **AddTradeModal** (`AddTradeModal.jsx`) — file exists but is **not reachable from the UI**; all trade entry is now via Contract Note import; do not wire it back without explicit instruction
-- **EditTradeModal** — still active; opened after ConfirmCodeModal confirmation on the edit flow; mirrors AddTradeModal but calls `db.trades.update(trade.id, …)` and pre-fills all fields from the existing trade record
+- **ConfirmCodeModal** (`src/components/ConfirmCodeModal.jsx`) — shared bottom-sheet modal for confirming destructive or sensitive actions; generates a random 4-digit code (1000–9999) via `useMemo` on mount, displays it large in accent color, requires exact match in a numeric input before enabling Confirm; `destructive` prop switches theme from gold to red; shake animation on wrong code entry; used by Trades (edit + delete) and Settings (clear all data)
+- **AddTradeModal** (`AddTradeModal.jsx`) — file exists but is **not reachable from the UI**; all trade entry is now via Contract Note import; do not wire it back without explicit instruction; also still references Dexie `db.trades` — update before reactivating
+- **EditTradeModal** — still active; opened after ConfirmCodeModal confirmation on the edit flow; pre-fills all fields from the existing trade record; calls `onUpdate(trade.id, updates)` prop (wired to `useTrades.updateTrade`); receives `trades` prop for the symbol autocomplete dropdown
 - **Trades page** (`Trades.jsx`) — single gold **Import** button (`ti-file-import`) in the header opens `ImportScreenshotModal`; no "Add Trade" button; two levels of live PnL + edit/delete per trade row:
   - **Per trade row** (BUY only): `(currentPrice − pricePerShare) × quantity` shown below the net consideration in green/red; hidden for SELL rows; each row has a gold Edit button and a red Delete button — both trigger `ConfirmCodeModal` before executing
   - **Per company group header**: total position PnL shown below the share count — calculated as `(currentPrice − avgCost) × netShares` where `avgCost` is the WAC across all buys; consistent with `usePortfolio` logic; hidden if no live price or no remaining shares
   - **P&L consistency**: per-trade P&Ls are pre-computed inside `CompanyGroup` using the same `currentPrice` variable that drives the group header, then passed as a `pnl` prop to each `TradeRow` — this guarantees the sum of individual rows always equals the group total (no stale-render divergence)
-  - Edit flow: code confirmed → `setEditing(trade)` opens `EditTradeModal`; Delete flow: code confirmed → `db.trades.delete(trade.id)`
-- **Settings screen** (`Settings.jsx`) — redesigned with icon-chip rows grouped into glass cards by section:
-  - **Gmail sync section** — connected account row (shows email + green "Connected" badge if linked, reads `sikafolio_gmail_email` from localStorage), last synced date row (from `syncMeta`), "Rescan all history" row with trade count sub-label
+  - Edit flow: code confirmed → `setEditing(trade)` opens `EditTradeModal`; Delete flow: code confirmed → `deleteTrade(trade.id)`
+  - Props received: `prices`, `trades`, `tradesLoading`, `updateTrade`, `deleteTrade`, `addTrades`, `checkDuplicate`
+- **Settings screen** (`Settings.jsx`) — icon-chip rows grouped into glass cards by section:
   - **iC Securities section** — "Direct broker sync" and "Import from statement" rows; both open a `ComingSoonModal` bottom sheet (gold icon, "Coming soon" copy, "Got it" dismiss); no functionality behind these yet
-  - **Data section** — "Export trades" row downloads all trades as a CSV (`sikafolio-trades-YYYY-MM-DD.csv`) via `exportCSV()`; "Notifications" row shows a "Soon" badge (non-tappable); "Clear all portfolio data" row (danger/red styling) triggers `ConfirmCodeModal`
+  - **Data section** — "Export trades" row downloads all trades as a CSV (`sikafolio-trades-YYYY-MM-DD.csv`) via `exportCSV()`; "Notifications" row shows a "Soon" badge (non-tappable); "Clear all portfolio data" row (danger/red styling) triggers `ConfirmCodeModal` then calls `clearAllTrades()`
   - **Sign out** ghost button below the data section
-  - **About footer** — `SikaFolio v1.0.0` and `Prices: afx.kwayisi.org · GSE` as 11px dim microcopy; replaces the old Prices + Display info rows which were read-only clutter
+  - **About footer** — `SikaFolio v1.0.0` and `Prices: afx.kwayisi.org · GSE` as 11px dim microcopy
   - `SettingsRow` internal component: accepts `icon`, `label`, `sub`, `value`, `valueColor`, `onClick`, `chevron`, `danger` props; renders a 32px icon chip + text block + optional right value/chevron
+  - Props received: `user`, `onLogout`, `trades`, `clearAllTrades`, `refetchTrades`
 - **Markets page** (`Markets.jsx`) — lists all GSE-listed equities with company logo, full name, ticker, live price, absolute + percentage change (colour-coded green/red), and volume; shows GSE Composite Index card at top; header right shows market status chip (see below) that opens `PriceInfoSheet` on tap
 - **Market status chip** — appears in the top-right header of Portfolio and Markets pages; uses `isMarketOpen()` to show `● MARKET OPEN` (green tint, animated dot) or `● MARKET CLOSED` (muted, static grey dot) + `ⓘ` icon; tapping opens `PriceInfoSheet`
 - **PriceInfoSheet** (`src/components/PriceInfoSheet.jsx`) — bottom-sheet modal explaining price data context; states prices are official GSE closing prices (updated once after each session, 15:00 GMT), not real-time broker feed prices; shows source row (afx.kwayisi.org + last-updated time); backdrop tap or "Got it" button to dismiss; used by Portfolio and Markets
 - **Company logo system** — `CompanyLogo` component (`src/components/CompanyLogo.jsx`) with three-tier fallback: Clearbit full logo → Google S2 favicon → coloured letter avatar; accepts `size` prop (`"sm"` 32px / `"md"` 40px / `"lg"` 52px); import it anywhere a company logo is needed
 - **GSE company registry** (`src/constants/gseCompanies.js`) — single source of truth mapping every GSE ticker to `{ name, domain }`; `getCompany(symbol)` helper returns the entry or a sensible default; update this file when adding new tickers or correcting domains, not inside components
-- **News page** (`src/pages/News.jsx`) — 5th tab (`ti-news`); fetches Ghanaian financial news RSS feeds via `/api/news` Vercel proxy; two tabs: "Your stocks" (default) filters articles matching user's holdings, "All GSE news" shows everything:
+- **News page** (`src/pages/News.jsx`) — 5th tab (`ti-news`); fetches Ghanaian financial news RSS feeds via `/api/news` Vercel proxy; two tabs: "Your stocks" (default) filters articles matching user's holdings, "All GSE news" shows everything; receives `trades` prop and derives held symbols from it (no DB access):
   - **Matching logic** — `buildSearchTerms(symbol)` generates search terms from `GSE_COMPANIES`: full name, first word, first two words, and the ticker itself (e.g. MTNGH → ["MTN Ghana", "MTN", "MTNGH"]); `articleMatchesSymbol()` checks title + description case-insensitively
   - **NewsCard** — gold ticker chips for each matched holding, gold left-accent bar, headline (13px 600), description excerpt (3-line clamp), source + relative timestamp footer, full-page `<a>` link to article; accent bar only appears when the card matches a holding
   - **States** — skeleton loading (4 placeholder cards), error state with retry button, empty state for "Your stocks" with escape hatch to "All GSE news"
@@ -57,22 +54,22 @@ The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys f
   - **Tab count badge** — "Your stocks · N" shows match count when non-zero
 
 ### What's not yet built (known gaps)
-- Push notifications / true background sync (scheduled sync only fires while the app is open)
-- Access token refresh (tokens expire after ~1 hour; user must reconnect Gmail from Settings)
+- Push notifications / true background sync
+- Access token refresh for Google OAuth (tokens expire after ~1 hour; user must re-login)
 
 ## Auth system
 
 ### Local accounts
-- Username (stored in the `email` DB column as unique identifier) + passcode
-- Two-step login: step 1 enter username → look up in DB → step 2 enter passcode
-- Sign-up collects: first name, last name, username (min 3 chars, no spaces, live availability check), passcode (min 4 chars), confirm passcode
-- Username availability checked via Dexie query, debounced 500ms, shown as "✓ Available" / "✕ Taken" next to the field
+- Username (stored in the `email` column as unique identifier) + passcode
+- Two-step login: step 1 enter username → `GET /api/users?email=...` → step 2 enter passcode (checked client-side against returned user object)
+- Sign-up collects: first name, last name, username (min 3 chars, no spaces, live availability check via `GET /api/users`), passcode (min 4 chars), confirm passcode; creates user via `POST /api/users`
+- Username availability checked debounced 500ms, shown as "✓ Available" / "✕ Taken" next to the field
 - Input border turns green/red to reflect passcode match and username availability
 
 ### Google accounts
 - OAuth via `@react-oauth/google` using `useGoogleLogin` implicit flow
-- Scopes: `openid email profile https://www.googleapis.com/auth/gmail.readonly` — all requested in one consent
-- On success: fetches `https://www.googleapis.com/oauth2/v2/userinfo`, upserts to `db.users` with `provider: 'google'`
+- Scopes: `openid email profile` only — no Gmail access
+- On success: fetches `https://www.googleapis.com/oauth2/v2/userinfo`, upserts to Neon via `POST /api/users` with `provider: 'google'`
 - Google users have no username or passcode — they always sign in via "Continue with Google"
 - Google Client ID is in `.env` as `VITE_GOOGLE_CLIENT_ID`
 - Google Cloud project: **Sikafolio** (project=sikafolio)
@@ -83,42 +80,33 @@ The app is **live at sikafolio.vercel.app** (deployed via Vercel, auto-deploys f
 ### Session persistence
 - On login, `{ email, name, avatar }` stored to localStorage under key `sikafolio_session`
 - Access token kept in memory only (not persisted — short-lived, no refresh token)
-- On app load: if session exists → skip splash, go straight to portfolio
+- On app load: if session exists → skip splash, go straight to portfolio; `useTrades(user.email)` fires immediately to load trades
 - On logout: localStorage cleared, state reset, returns to splash
 
-## Gmail sync details
+## Data architecture
 
-### Email format (iC Securities)
-Subject: `IC Securities (Ghana) Limited - Trade Notification`  
-Sender: `noreply@ic.africa`  
-Body fields (may be collapsed onto one line in HTML emails):
-```
-Order Type: Buy
-Equity   GSE MTNGH       ← may also be GSE.SIC format
-Share Quantity: 41
-Gross Consideration: 278.80
-Processing Fee: 6.98
-Net Consideration: 285.78
-Settlement Date:  Tue, 12 May, 2026
-```
+### Neon Postgres (cloud — syncs across devices)
+Tables (see `sql/schema.sql`):
+- `users` — `id, email (unique), name, passcode, avatar, provider, created_at`
+- `trades` — `id, user_email, email_id, order_number, trade_id, symbol, order_type, quantity, gross_consideration, processing_fee, net_consideration, price_per_share, settlement_date, execution_date, status, source, created_at`; indexed on `user_email`, `trade_id`, `order_number`, `email_id`
+- `sync_meta` — `(user_email, key)` composite PK, `value TEXT`; currently unused but kept for future sync state
 
-### Parser rules (`gmailService.js`)
-- `get(label)` uses a stop-word lookahead `(?=\s*(?:Order|Equity|Share|Gross|Processing|Net|Settlement|Account|Dear|Thank|$))` capped at 100 chars — critical because iC emails often collapse all fields onto one line in HTML, so `[^\n]+` would capture everything
-- Symbol: strips `GSE[.\s]+` prefix (handles both `GSE MTNGH` and `GSE.SIC` formats), uppercased
-- `orderType` must be `'Buy'` or `'Sell'` exactly — the portfolio hook does `=== 'Buy'` comparison
-- HTML fallback converts `<br>`, `<p>`, `<div>`, `<tr>`, `<td>`, `<li>` to newlines before stripping tags
-- `in:anywhere` on the Gmail query catches emails in spam/trash
+API responses map snake_case DB columns → camelCase for the frontend.
 
-### Sync flow
-- First run: fetches ALL historical emails, no `after:` filter
-- Subsequent runs: adds `after:<unix_timestamp of lastSyncDate>` to query
-- `forceFullScan`: deletes `lastSyncDate` AND clears only Gmail-sourced trades (`source !== 'manual'`) before re-importing — preserves manually entered trades; used by "Rescan all history" button
-- "Rescan all history" button shows whenever Gmail is connected and a prior sync exists (not just when trades.length === 0)
-- After sync, `lastSyncDate` saved to `syncMeta` table in IndexedDB
-- Scheduled auto-sync: removed; App.jsx is a clean shell (session + screen routing + `usePrices`); no polling or scheduled sync logic
+### IndexedDB / Dexie (local — device only)
+`src/services/db.js` at version 6:
+- `prices` — live price cache keyed by symbol
+- `priceSnapshots` — daily `{ date, values: { SYMBOL: price } }` written by `usePrices` after each successful fetch; used by `usePortfolioHistory`
+- `trades`, `users`, `syncMeta` tables were **dropped** in version 6
+
+### Trade state flow
+`useTrades(userEmail)` in `App.jsx` → fetches from `/api/trades` on mount → holds array in React state → passed as `trades` prop to all pages that need it → mutations (`addTrade`, `updateTrade`, `deleteTrade`, etc.) call the API and update local state optimistically.
+
+`checkDuplicate(tradeId, orderNumber, emailId)` runs synchronously against the in-memory array — no async DB call needed.
 
 ### Portfolio calculation
-- `usePortfolio` groups trades by symbol, then by `orderType === 'Buy'` vs sell
+- `usePortfolio(trades, prices)` — pure function, no side effects, called in `Portfolio.jsx`
+- Groups trades by symbol, then by `orderType === 'Buy'` vs sell
 - WAC (weighted average cost) = total gross consideration / total shares bought
 - `netShares = totalBought - totalSold` — if ≤ 0, position is excluded from holdings
 - `stocksSold` is computed from raw `trades` BEFORE the holdings filter so fully-sold stocks are counted; it is the sum of `grossConsideration` on all sell trades (not profit)
@@ -128,46 +116,32 @@ Settlement Date:  Tue, 12 May, 2026
 - PnL = `(currentPrice * netShares) - bookValue` using live GSE prices (or buy-price fallback)
 - Prices keyed by uppercase ticker symbol (e.g., `'MTNGH'`, `'SIC'`, `'GCB'`, `'CAL'`) — must match parsed trade symbols exactly
 
-### DB schema (`db.js`)
-- Version 1: `trades`, `prices`, `syncMeta`
-- Version 2: adds `users: '++id, &email, name, passcode, avatar, provider'`
-  - `&email` is the unique login identifier (stores actual email for Google, username for local)
-  - `provider`: `'google'` | `'local'`
-- Version 3: adds `priceSnapshots: 'date'`
-  - Primary key is the date string `'YYYY-MM-DD'`; `put({ date, values })` naturally upserts one row per day
-  - `values` is `{ SYMBOL: price }` — a snapshot of all fetched GSE prices for that day
-  - Written by `usePrices` after every successful `fetchLatestPrices()` call
-  - Read by `usePortfolioHistory` to reconstruct historical portfolio values
-- Version 4: adds `orderNumber` index to `trades` for contract note import dedup
-- Version 5: adds `tradeId` index to `trades` for contract note import dedup (`tradeId` is the authoritative dedup key — if present, no fallback to `orderNumber`; same orderNumber across different tradeIds = partial fills of one order, not duplicates)
-
 ### Trade date fields
-- `executionDate` — used for display and sort order in Trades.jsx; stored as full ISO string by Gmail/paste, as `YYYY-MM-DD` by contract note import; contract note import uses `settlementDate` as `executionDate` (falls back to Trade Date) for consistency with Gmail imports which only ever have Settlement Date; all consumers use `new Date(executionDate)` or `.slice(0, 10)` so both formats work
-- `settlementDate` — secondary display field ("settled …"); raw string from Gmail email body, `YYYY-MM-DD` from contract note/edit; used by `usePortfolioHistory` via `toDate = str => str?.slice(0, 10)` fallback chain; may be null for Gmail trades where settlement line was missing in the email
-
-## Splash screen design preferences
-- No "Sign in" header inside the card — the logo + tagline above serve that purpose
-- Google button always below the gold primary button, separated by an "or" divider
-- No feature pill buttons below the card
-- Sign-up page: Google path at top, "or create a username account" divider, manual form below
-- No explanatory info boxes — keep it clean
-- Input borders change color (green/red) to give live feedback on username availability and passcode match
-- Labels above inputs (not placeholder-only) for sign-up fields
+- `executionDate` — used for display and sort order in Trades.jsx; stored as `YYYY-MM-DD` by contract note import; all consumers use `new Date(executionDate)` or `.slice(0, 10)` so both formats work
+- `settlementDate` — secondary display field ("settled …"); `YYYY-MM-DD` from contract note/edit; used by `usePortfolioHistory`
 
 ## Vercel API routes
-- `api/gse.js` — serverless function that proxies `https://afx.kwayisi.org/gse/`; uses full Chrome browser headers (User-Agent, Sec-Fetch-*, Accept-Language, etc.) + 8s `AbortSignal` timeout on the direct fetch; if the direct fetch fails (e.g. afx.kwayisi.org blocks Vercel IPs), falls back to fetching via allorigins.win server-side before giving up; returns raw HTML with `Cache-Control: s-maxage=300`
-- `api/news.js` — fetches RSS feeds from CitiBusinessNews (`citibusinessnews.com/feed/`), Myjoyonline Business (`myjoyonline.com/business/feed/`), and GhanaBusinessNews (`ghanabusinessnews.com/feed/`) in parallel via `Promise.allSettled`; parses XML with regex (handles CDATA + HTML entity decoding); caps at 60 articles sorted by pubDate; `Cache-Control: s-maxage=900` (15 min); returns `{ title, link, description, pubDate, source }[]`; partial failures are silently swallowed so one dead feed doesn't break the whole response; 8-second per-feed timeout via `AbortSignal.timeout(8000)`
+
+### Data routes (Neon-backed)
+- `api/_db.js` — shared helper; exports `getDb()` which returns `neon(process.env.DATABASE_URL)`; imported by all data routes; requires `DATABASE_URL` env var set in Vercel
+- `api/users.js` — `GET ?email=` returns user or 404; `POST` body `{ email, name, passcode, avatar, provider }` upserts (ON CONFLICT updates name/avatar only, never overwrites passcode)
+- `api/trades.js` — `GET ?email=` returns all trades for user sorted by `execution_date DESC`; `POST` body `{ email, trade }` inserts one or `{ email, trades: [...] }` bulk inserts (skips errors individually); `PUT ?id=&` body `{ email, updates }` partial update; `DELETE ?id=&email=` deletes one, `?email=&source=` deletes by source, `?email=&clearAll=true` deletes all
+- `api/sync-meta.js` — `GET ?email=&key=` returns `{ value }`; `PUT` body `{ email, key, value }` upserts; `DELETE ?email=&key=` removes
+
+### Proxy / utility routes
+- `api/gse.js` — proxies `https://afx.kwayisi.org/gse/`; uses full Chrome browser headers + 8s `AbortSignal` timeout on the direct fetch; falls back to allorigins.win server-side before giving up; returns raw HTML with `Cache-Control: s-maxage=300`
+- `api/news.js` — fetches RSS feeds from CitiBusinessNews, Myjoyonline Business, and GhanaBusinessNews in parallel via `Promise.allSettled`; parses XML with regex (handles CDATA + HTML entity decoding); caps at 60 articles sorted by pubDate; `Cache-Control: s-maxage=900` (15 min); returns `{ title, link, description, pubDate, source }[]`; partial failures are silently swallowed; 8-second per-feed timeout via `AbortSignal.timeout(8000)`
 - `api/ocr.js` — receives `{ image: base64string, mimeType }` POST; calls `gemini-2.5-flash` via the Generative Language API with a structured prompt; returns `{ trades: [...] }` as parsed JSON; requires `GEMINI_API_KEY` env var (free tier: 1500 req/day at aistudio.google.com); 30-second timeout; must be tested via `vercel dev` (not `vite dev`) since Vite can't proxy to a local serverless function
 
 ## Vite config
 - Fixed port: `server: { port: 5173, strictPort: true }` — will error instead of silently switching ports
 - Dev proxy: `/api/gse` → `https://afx.kwayisi.org/gse/` so the same fetch path works in both dev and Vercel prod
-- `/api/ocr` and `/api/news` are **not** proxied by Vite — use `vercel dev` (port 3000) when testing contract note import or the News page locally; `vite dev` (port 5173) is fine for everything else
+- `/api/ocr`, `/api/news`, `/api/trades`, `/api/users`, `/api/sync-meta` are **not** proxied by Vite — use `vercel dev` (port 3000) when testing these locally; `vite dev` (port 5173) is fine for UI-only work
 
 ## Icons
 - Tabler Icons loaded via CDN in `index.html`: `https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css`
 - Use class `ti ti-<name>` on `<i>` elements — no npm package needed
-- Common icons used: `ti-chart-pie` (portfolio), `ti-history` (trades), `ti-trending-up` (markets), `ti-news` (news tab), `ti-settings` (settings), `ti-edit`, `ti-trash`, `ti-alert-circle`, `ti-mail`, `ti-refresh`, `ti-building-bank`, `ti-file-import`, `ti-download`, `ti-bell`, `ti-clock`
+- Common icons used: `ti-chart-pie` (portfolio), `ti-history` (trades), `ti-trending-up` (markets), `ti-news` (news tab), `ti-settings` (settings), `ti-edit`, `ti-trash`, `ti-alert-circle`, `ti-refresh`, `ti-building-bank`, `ti-file-import`, `ti-download`, `ti-bell`, `ti-clock`
 
 ## Logo
 - The logo image is `src/assets/logo.jpg` (hand holding cash, black silhouette on white).

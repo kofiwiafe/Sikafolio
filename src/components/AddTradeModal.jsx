@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../services/db'
-import { parseTradeText } from '../services/gmailService'
 import { GSE_COMPANIES } from '../constants/gseCompanies'
 
 const ALL_TICKERS = Object.entries(GSE_COMPANIES).sort(([a], [b]) => a.localeCompare(b))
