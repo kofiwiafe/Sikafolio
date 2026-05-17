@@ -194,7 +194,33 @@ function toTitleCase(str) {
 }
 
 function ReportCard({ report }) {
+  const [explanation, setExplanation] = useState(null)
+  const [explaining, setExplaining] = useState(false)
   const cleanTitle = toTitleCase(report.title.replace(/^PR-\d+\s+/i, '').trim())
+
+  async function explain(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (explaining || explanation) return
+    setExplaining(true)
+    try {
+      const res = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: cleanTitle,
+          description: `This is an official financial filing submitted to the Ghana Stock Exchange (GSE) by ${report.company || report.ticker}. Explain in plain English what this type of report is and what it means for an ordinary person who owns shares in this company.`,
+        }),
+      })
+      const data = await res.json()
+      if (data.summary) setExplanation(data.summary)
+    } catch {
+      // silently fail
+    } finally {
+      setExplaining(false)
+    }
+  }
+
   return (
     <a href={report.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'block' }}>
       <div style={{
@@ -217,8 +243,49 @@ function ReportCard({ report }) {
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4, marginBottom: 4 }}>
               {cleanTitle}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--dim)' }}>
-              {relativeTime(report.date)} · gse.com.gh
+
+            {/* Plain-English explanation */}
+            {explanation && (
+              <div style={{
+                fontSize: 12, color: 'var(--text)', lineHeight: 1.6,
+                margin: '8px 0',
+                padding: '8px 10px',
+                background: 'rgba(240,194,94,0.07)',
+                border: '1px solid rgba(240,194,94,0.15)',
+                borderRadius: 8,
+              }}>
+                <span style={{
+                  fontSize: 10, color: 'var(--gold)', fontWeight: 700,
+                  letterSpacing: '0.05em', display: 'block', marginBottom: 4,
+                  fontFamily: 'var(--font-ui)',
+                }}>
+                  PLAIN ENGLISH
+                </span>
+                {explanation}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: 'var(--dim)' }}>
+                {relativeTime(report.date)} · gse.com.gh
+              </div>
+              {!explanation && (
+                <button
+                  onClick={explain}
+                  disabled={explaining}
+                  style={{
+                    background: 'none', border: 'none', padding: 0,
+                    cursor: explaining ? 'default' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    fontSize: 11, fontWeight: 600,
+                    color: explaining ? 'var(--dim)' : 'var(--muted)',
+                    fontFamily: 'var(--font-ui)',
+                  }}
+                >
+                  <i className={`ti ti-wand${explaining ? ' spinning' : ''}`} style={{ fontSize: 13 }} />
+                  {explaining ? 'Explaining…' : 'Explain'}
+                </button>
+              )}
             </div>
           </div>
           <i className="ti ti-file-description" style={{ fontSize: 22, color: 'var(--gold)', flexShrink: 0, marginTop: 2 }} />
