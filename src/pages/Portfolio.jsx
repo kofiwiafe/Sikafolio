@@ -2,6 +2,7 @@ import { useState } from 'react'
 import StockCard from '../components/StockCard'
 import PriceInfoSheet from '../components/PriceInfoSheet'
 import TopPerformers from '../components/TopPerformers'
+import Logo from '../components/Logo'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { isMarketOpen } from '../hooks/usePrices'
 
@@ -12,8 +13,22 @@ function getGreeting() {
   return 'Good evening'
 }
 
+function ComingSoonModal({ onClose }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 360, background: '#10131A', borderRadius: 20, border: '1px solid var(--border)', padding: '32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, animation: 'modal-in 0.28s cubic-bezier(0.22,1,0.36,1) both' }}>
+        <i className="ti ti-clock" style={{ fontSize: 40, color: 'var(--gold)' }} />
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'Manrope, system-ui, sans-serif' }}>Coming soon</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.6 }}>This feature is on the roadmap and will be available in a future update.</div>
+        <button onClick={onClose} style={{ marginTop: 8, padding: '10px 28px', borderRadius: 10, background: 'var(--gold)', color: '#080A10', fontWeight: 700, fontSize: 14, fontFamily: 'Manrope, system-ui, sans-serif', border: 'none', cursor: 'pointer' }}>Got it</button>
+      </div>
+    </div>
+  )
+}
+
 export default function Portfolio({ prices, user, trades, tradesLoading }) {
   const [showInfo, setShowInfo] = useState(false)
+  const [showComingSoon, setShowComingSoon] = useState(false)
   const marketOpen = isMarketOpen()
   const { holdings, summary, loading } = usePortfolio(trades, prices?.prices || {})
   const fmt = (n) => n?.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -26,19 +41,46 @@ export default function Portfolio({ prices, user, trades, tradesLoading }) {
     : null
   const dayIsUp = (dayChangePct || 0) >= 0
 
+  const iconBtn = {
+    width: 36, height: 36, borderRadius: 10,
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid var(--border)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', color: 'var(--muted)', fontSize: 18,
+    flexShrink: 0,
+  }
+
   return (
     <div style={{ paddingBottom: 16 }}>
-      {/* App header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', fontFamily: 'Manrope, system-ui, sans-serif', lineHeight: 1 }}>{getGreeting()},</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', fontFamily: 'Manrope, system-ui, sans-serif', lineHeight: 1 }}>{user?.name?.split(' ')[0] || 'there'}</div>
+      {showComingSoon && <ComingSoonModal onClose={() => setShowComingSoon(false)} />}
+
+      {/* Brand bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px 0' }}>
+        <Logo size="md" />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div role="button" onClick={() => setShowComingSoon(true)} style={iconBtn}>
+            <i className="ti ti-search" />
+          </div>
+          <div role="button" onClick={() => setShowComingSoon(true)} style={iconBtn}>
+            <i className="ti ti-bell" />
+          </div>
+        </div>
+      </div>
+
+      {/* Greeting */}
+      <div style={{ padding: '16px 20px 14px' }}>
+        <div style={{ fontSize: 13, color: 'var(--muted)', fontFamily: 'Manrope, system-ui, sans-serif', marginBottom: 2 }}>
+          {getGreeting()},
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', fontFamily: 'Manrope, system-ui, sans-serif', lineHeight: 1.2, marginBottom: 12 }}>
+          {user?.name?.split(' ')[0] || 'there'} 👋
         </div>
         <div
           role="button"
           onClick={() => setShowInfo(true)}
           className="pill"
           style={{
+            display: 'inline-flex',
             color: marketOpen ? 'var(--green)' : 'var(--muted)',
             cursor: 'pointer',
             ...(marketOpen && { background: 'var(--green-dim)', borderColor: 'var(--green-border)' }),
@@ -63,26 +105,26 @@ export default function Portfolio({ prices, user, trades, tradesLoading }) {
 
           <div style={{ display: 'flex', gap: 0, paddingBottom: 22 }}>
             {/* Left: Current Balance */}
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, color: 'var(--text)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8, fontFamily: 'Manrope, system-ui, sans-serif', fontWeight: 600 }}>
                 Current Balance
               </div>
               <div className="mono" style={{ fontSize: 15, color: 'var(--muted)', letterSpacing: 0, fontWeight: 400, marginBottom: 2 }}>GHS</div>
-              <div className="mono" style={{ fontSize: 38, fontWeight: 500, color: 'var(--text)', lineHeight: 1, letterSpacing: '-1.5px' }}>
+              <div className="mono" style={{ fontSize: 'clamp(20px, 6.5vw, 38px)', fontWeight: 500, color: 'var(--text)', lineHeight: 1, letterSpacing: '-1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {fmt(summary?.totalValue || 0)}
               </div>
             </div>
 
             {/* Divider */}
-            <div style={{ width: 1, background: 'var(--border)', margin: '2px 18px 0', flexShrink: 0 }} />
+            <div style={{ width: 1, background: 'var(--border)', margin: '2px 12px 0', flexShrink: 0 }} />
 
             {/* Right: P&L */}
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, color: 'var(--text)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8, fontFamily: 'Manrope, system-ui, sans-serif', fontWeight: 600 }}>
-                Profit / Loss (P&L)
+                P&L
               </div>
               <div className="mono" style={{ fontSize: 15, color: 'var(--muted)', letterSpacing: 0, fontWeight: 400, marginBottom: 2 }}>GHS</div>
-              <div className="mono" style={{ fontSize: 38, fontWeight: 500, lineHeight: 1, letterSpacing: '-1.5px', color: isUp ? 'var(--green)' : 'var(--red)' }}>
+              <div className="mono" style={{ fontSize: 'clamp(20px, 6.5vw, 38px)', fontWeight: 500, lineHeight: 1, letterSpacing: '-1px', color: isUp ? 'var(--green)' : 'var(--red)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {summary ? (isUp ? '+' : '') + fmt(summary.totalPnL) : '0.00'}
               </div>
             </div>
