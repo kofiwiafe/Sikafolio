@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { GSE_COMPANIES } from '../constants/gseCompanies'
 import Logo from '../components/Logo'
 import CompanyLogo from '../components/CompanyLogo'
@@ -186,6 +188,56 @@ function NewsCard({ article, matchedSymbols }) {
   )
 }
 
+function ReportMarkdown({ children }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h2: ({ children }) => (
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginTop: 14, marginBottom: 4, fontFamily: 'var(--font-ui)' }}>
+            {children}
+          </div>
+        ),
+        h3: ({ children }) => (
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gold)', marginTop: 10, marginBottom: 3, fontFamily: 'var(--font-ui)' }}>
+            {children}
+          </div>
+        ),
+        p: ({ children }) => (
+          <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.65 }}>{children}</p>
+        ),
+        strong: ({ children }) => (
+          <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{children}</strong>
+        ),
+        table: ({ children }) => (
+          <div style={{ overflowX: 'auto', margin: '10px 0' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'var(--font-ui)' }}>{children}</table>
+          </div>
+        ),
+        thead: ({ children }) => <thead>{children}</thead>,
+        tbody: ({ children }) => <tbody>{children}</tbody>,
+        tr: ({ children }) => <tr>{children}</tr>,
+        th: ({ children }) => (
+          <th style={{ padding: '5px 8px', textAlign: 'left', color: 'var(--gold)', fontWeight: 700, borderBottom: '1px solid rgba(240,194,94,0.25)', whiteSpace: 'nowrap' }}>
+            {children}
+          </th>
+        ),
+        td: ({ children }) => (
+          <td style={{ padding: '5px 8px', color: 'var(--muted)', borderBottom: '1px solid var(--divider)', verticalAlign: 'top' }}>
+            {children}
+          </td>
+        ),
+        li: ({ children }) => (
+          <li style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 3, lineHeight: 1.55 }}>{children}</li>
+        ),
+        ul: ({ children }) => <ul style={{ paddingLeft: 16, margin: '4px 0 8px' }}>{children}</ul>,
+      }}
+    >
+      {children}
+    </ReactMarkdown>
+  )
+}
+
 function toTitleCase(str) {
   const minors = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'in', 'on', 'at', 'to', 'by', 'of'])
   return str.toLowerCase().replace(/\b\w+/g, (word, offset) =>
@@ -209,7 +261,8 @@ function ReportCard({ report }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: cleanTitle,
-          description: `This is an official financial filing submitted to the Ghana Stock Exchange (GSE) by ${report.company || report.ticker}. Explain in plain English what this type of report is and what it means for an ordinary person who owns shares in this company.`,
+          description: `Company: ${report.company || report.ticker} (ticker: ${report.ticker}). This report was filed on the Ghana Stock Exchange portal on ${report.date ? new Date(report.date).toDateString() : 'an unknown date'}.`,
+          type: 'report',
         }),
       })
       const data = await res.json()
@@ -244,24 +297,17 @@ function ReportCard({ report }) {
               {cleanTitle}
             </div>
 
-            {/* Plain-English explanation */}
+            {/* Rich breakdown */}
             {explanation && (
               <div style={{
-                fontSize: 12, color: 'var(--text)', lineHeight: 1.6,
-                margin: '8px 0',
-                padding: '8px 10px',
-                background: 'rgba(240,194,94,0.07)',
+                fontSize: 12, color: 'var(--text)', lineHeight: 1.7,
+                margin: '10px 0 4px',
+                padding: '12px 14px',
+                background: 'rgba(240,194,94,0.05)',
                 border: '1px solid rgba(240,194,94,0.15)',
-                borderRadius: 8,
+                borderRadius: 10,
               }}>
-                <span style={{
-                  fontSize: 10, color: 'var(--gold)', fontWeight: 700,
-                  letterSpacing: '0.05em', display: 'block', marginBottom: 4,
-                  fontFamily: 'var(--font-ui)',
-                }}>
-                  PLAIN ENGLISH
-                </span>
-                {explanation}
+                <ReportMarkdown>{explanation}</ReportMarkdown>
               </div>
             )}
 
