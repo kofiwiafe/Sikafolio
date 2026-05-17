@@ -228,6 +228,32 @@ function ReportCard({ report }) {
   )
 }
 
+function NoReportCard({ symbol }) {
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 'var(--r-md)', padding: '12px 16px', marginBottom: 8,
+      position: 'relative', overflow: 'hidden', opacity: 0.55,
+    }}>
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+        background: 'rgba(255,255,255,0.08)',
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 4, gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+            <TickerChip symbol={symbol} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--dim)' }}>
+            No report filed on GSE portal yet
+          </div>
+        </div>
+        <i className="ti ti-file-off" style={{ fontSize: 20, color: 'var(--dim)', flexShrink: 0 }} />
+      </div>
+    </div>
+  )
+}
+
 function Skeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -418,13 +444,18 @@ export default function News({ trades, reports = [], markReportsSeen }) {
           </div>
         )}
 
-        {/* Financial Reports — shown at top of Your stocks tab */}
-        {!loading && !error && tab === 'mine' && reports.length > 0 && (
+        {/* Financial Reports — one card per held company, filed or not */}
+        {!loading && !error && tab === 'mine' && heldSymbols.length > 0 && (
           <>
             <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
               Financial Reports
             </div>
-            {reports.map((r, i) => <ReportCard key={`${r.ticker}-${r.date}-${i}`} report={r} />)}
+            {heldSymbols.map(sym => {
+              const report = reports.find(r => r.ticker.toUpperCase() === sym.toUpperCase())
+              return report
+                ? <ReportCard key={sym} report={report} />
+                : <NoReportCard key={sym} symbol={sym} />
+            })}
             <div style={{ height: 4 }} />
             {displayed.length > 0 && (
               <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>

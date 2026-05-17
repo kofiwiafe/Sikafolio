@@ -89,7 +89,7 @@ export default async function handler(req, res) {
   const filterSymbols = (req.query.symbols || '')
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
 
-  // Fetch pages 1–5 in parallel to cover several months of filings
+  // Fetch pages 1–5 in parallel (gse.com.gh only has ~5 pages of financial statements)
   const pages = await Promise.all([1, 2, 3, 4, 5].map(fetchPage))
 
   // Collect all filings, deduplicate by title
