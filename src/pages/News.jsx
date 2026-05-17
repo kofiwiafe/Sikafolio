@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { GSE_COMPANIES } from '../constants/gseCompanies'
 import Logo from '../components/Logo'
 import CompanyLogo from '../components/CompanyLogo'
@@ -186,6 +186,48 @@ function NewsCard({ article, matchedSymbols }) {
   )
 }
 
+function toTitleCase(str) {
+  const minors = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'in', 'on', 'at', 'to', 'by', 'of'])
+  return str.toLowerCase().replace(/\b\w+/g, (word, offset) =>
+    offset === 0 || !minors.has(word) ? word.charAt(0).toUpperCase() + word.slice(1) : word
+  )
+}
+
+function ReportCard({ report }) {
+  const cleanTitle = toTitleCase(report.title.replace(/^PR-\d+\s+/i, '').trim())
+  return (
+    <a href={report.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'block' }}>
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 'var(--r-md)', padding: '12px 16px', marginBottom: 8,
+        position: 'relative', overflow: 'hidden', cursor: 'pointer',
+      }}>
+        <div style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+          background: 'linear-gradient(180deg, var(--gold), rgba(240,194,94,0.2))',
+        }} />
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', paddingLeft: 4, gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <TickerChip symbol={report.ticker} />
+              <span style={{ fontSize: 10, color: 'var(--dim)', fontFamily: 'Manrope, system-ui, sans-serif', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                GSE Filing
+              </span>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4, marginBottom: 4 }}>
+              {cleanTitle}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--dim)' }}>
+              {relativeTime(report.date)} · gse.com.gh
+            </div>
+          </div>
+          <i className="ti ti-file-description" style={{ fontSize: 22, color: 'var(--gold)', flexShrink: 0, marginTop: 2 }} />
+        </div>
+      </div>
+    </a>
+  )
+}
+
 function Skeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -204,12 +246,21 @@ function Skeleton() {
   )
 }
 
-export default function News({ trades }) {
+export default function News({ trades, reports = [], markReportsSeen }) {
   const [articles, setArticles]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(null)
   const [tab, setTab]             = useState('mine') // 'mine' | 'all'
   const [lastFetched, setLastFetched] = useState(null)
+  const markedRef = useRef(false)
+
+  // Mark reports as seen the first time the user lands on the 'mine' tab with reports visible
+  useEffect(() => {
+    if (tab === 'mine' && reports.length > 0 && !markedRef.current) {
+      markedRef.current = true
+      markReportsSeen?.()
+    }
+  }, [tab, reports.length])
 
   // All unique symbols the user has traded, derived from prop
   const heldSymbols = useMemo(() => [...new Set((trades || []).map(t => t.symbol))], [trades])
@@ -365,6 +416,22 @@ export default function News({ trades }) {
               Show all GSE news
             </button>
           </div>
+        )}
+
+        {/* Financial Reports — shown at top of Your stocks tab */}
+        {!loading && !error && tab === 'mine' && reports.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+              Financial Reports
+            </div>
+            {reports.map((r, i) => <ReportCard key={`${r.ticker}-${r.date}-${i}`} report={r} />)}
+            <div style={{ height: 4 }} />
+            {displayed.length > 0 && (
+              <div style={{ fontSize: 10, color: 'var(--dim)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+                Latest News
+              </div>
+            )}
+          </>
         )}
 
         {!loading && !error && displayed.map((article, i) => (

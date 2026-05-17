@@ -26,7 +26,7 @@ function ComingSoonModal({ onClose }) {
   )
 }
 
-export default function Portfolio({ prices, user, trades, tradesLoading }) {
+export default function Portfolio({ prices, user, trades, tradesLoading, hasNewReports, onViewReports }) {
   const [showInfo, setShowInfo] = useState(false)
   const [showComingSoon, setShowComingSoon] = useState(false)
   const marketOpen = isMarketOpen()
@@ -61,8 +61,15 @@ export default function Portfolio({ prices, user, trades, tradesLoading }) {
           <div role="button" onClick={() => setShowComingSoon(true)} style={iconBtn}>
             <i className="ti ti-search" />
           </div>
-          <div role="button" onClick={() => setShowComingSoon(true)} style={iconBtn}>
+          <div role="button" onClick={onViewReports} style={{ ...iconBtn, position: 'relative' }}>
             <i className="ti ti-bell" />
+            {hasNewReports && (
+              <span style={{
+                position: 'absolute', top: 6, right: 6,
+                width: 8, height: 8, borderRadius: '50%',
+                background: 'var(--red)', border: '2px solid #080A10',
+              }} />
+            )}
           </div>
         </div>
       </div>

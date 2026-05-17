@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Splash from './pages/Splash'
 import Portfolio from './pages/Portfolio'
 import Trades from './pages/Trades'
@@ -8,6 +8,7 @@ import Settings from './pages/Settings'
 import BottomNav from './components/BottomNav'
 import { usePrices } from './hooks/usePrices'
 import { useTrades } from './hooks/useTrades'
+import { useReports } from './hooks/useReports'
 
 const SESSION_KEY = 'sikafolio_session'
 
@@ -18,8 +19,14 @@ function getStoredSession() {
 export default function App() {
   const [user, setUser]     = useState(getStoredSession)
   const [screen, setScreen] = useState(() => getStoredSession() ? 'portfolio' : 'splash')
-  const prices  = usePrices()
+  const prices    = usePrices()
   const tradesApi = useTrades(user?.email)
+
+  const heldSymbols = useMemo(
+    () => [...new Set((tradesApi.trades || []).map(t => t.symbol))],
+    [tradesApi.trades]
+  )
+  const { reports, hasNew: hasNewReports, markAllSeen: markReportsSeen } = useReports(heldSymbols)
 
   function handleLogin(userInfo) {
     const profile = { email: userInfo.email, name: userInfo.name, avatar: userInfo.avatar }
@@ -42,7 +49,11 @@ export default function App() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {screen === 'portfolio' && (
-          <Portfolio prices={prices} user={user} trades={tradesApi.trades} tradesLoading={tradesApi.loading} />
+          <Portfolio
+            prices={prices} user={user} trades={tradesApi.trades} tradesLoading={tradesApi.loading}
+            hasNewReports={hasNewReports}
+            onViewReports={() => setScreen('news')}
+          />
         )}
         {screen === 'trades' && (
           <Trades
@@ -57,7 +68,7 @@ export default function App() {
           />
         )}
         {screen === 'markets'  && <Markets prices={prices} user={user} trades={tradesApi.trades} />}
-        {screen === 'news'     && <News trades={tradesApi.trades} />}
+        {screen === 'news'     && <News trades={tradesApi.trades} reports={reports} markReportsSeen={markReportsSeen} />}
         {screen === 'settings' && (
           <Settings
             user={user}
