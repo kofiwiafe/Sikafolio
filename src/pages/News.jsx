@@ -503,8 +503,26 @@ export default function News({ trades, reports = [], markReportsSeen }) {
         </div>
       </div>
 
+      {/* Disclaimer bar */}
+      <div style={{
+        margin: '12px 16px 0',
+        padding: '8px 12px',
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        display: 'flex', alignItems: 'center', gap: 7,
+      }}>
+        <i className="ti ti-alert-circle" style={{ fontSize: 13, color: 'var(--dim)', flexShrink: 0 }} />
+        <span style={{
+          fontSize: 10, color: 'var(--dim)', fontFamily: 'var(--font-ui)',
+          letterSpacing: '0.02em', lineHeight: 1.5,
+        }}>
+          AI summaries &amp; breakdowns are for general information only · Not financial advice · Always verify with official GSE filings and a qualified advisor
+        </span>
+      </div>
+
       {/* Content */}
-      <div style={{ padding: '14px 16px 0' }}>
+      <div style={{ padding: '10px 16px 0' }}>
         {loading && <Skeleton />}
 
         {!loading && error && (
