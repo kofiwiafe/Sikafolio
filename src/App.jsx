@@ -11,6 +11,7 @@ import { useTrades } from './hooks/useTrades'
 import { useReports } from './hooks/useReports'
 
 const SESSION_KEY = 'sikafolio_session'
+const SCREEN_KEY  = 'sikafolio_screen'
 
 function getStoredSession() {
   try { return JSON.parse(localStorage.getItem(SESSION_KEY)) } catch { return null }
@@ -18,7 +19,15 @@ function getStoredSession() {
 
 export default function App() {
   const [user, setUser]     = useState(getStoredSession)
-  const [screen, setScreen] = useState(() => getStoredSession() ? 'portfolio' : 'splash')
+  const [screen, setScreen] = useState(() => {
+    if (!getStoredSession()) return 'splash'
+    return localStorage.getItem(SCREEN_KEY) || 'portfolio'
+  })
+
+  function navigate(s) {
+    localStorage.setItem(SCREEN_KEY, s)
+    setScreen(s)
+  }
   const prices    = usePrices()
   const tradesApi = useTrades(user?.email)
 
@@ -32,11 +41,12 @@ export default function App() {
     const profile = { email: userInfo.email, name: userInfo.name, avatar: userInfo.avatar }
     localStorage.setItem(SESSION_KEY, JSON.stringify(profile))
     setUser(profile)
-    setScreen('portfolio')
+    navigate('portfolio')
   }
 
   function handleLogout() {
     localStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem(SCREEN_KEY)
     setUser(null)
     setScreen('splash')
   }
@@ -52,7 +62,7 @@ export default function App() {
           <Portfolio
             prices={prices} user={user} trades={tradesApi.trades} tradesLoading={tradesApi.loading}
             hasNewReports={hasNewReports}
-            onViewReports={() => setScreen('news')}
+            onViewReports={() => navigate('news')}
           />
         )}
         {screen === 'trades' && (
@@ -79,7 +89,7 @@ export default function App() {
           />
         )}
       </div>
-      <BottomNav active={screen} onChange={setScreen} />
+      <BottomNav active={screen} onChange={navigate} />
     </div>
   )
 }

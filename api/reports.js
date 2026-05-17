@@ -1,44 +1,52 @@
-const GSE_URL = 'https://gse.com.gh/financial-statements/'
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+}
 
-async function fetchHtml() {
-  // Try direct fetch with browser headers
+function pageUrl(n) {
+  return n === 1
+    ? 'https://gse.com.gh/financial-statements/'
+    : `https://gse.com.gh/financial-statements/page/${n}/`
+}
+
+async function fetchPage(n) {
+  const url = pageUrl(n)
+
+  // Direct fetch
   try {
-    const r = await fetch(GSE_URL, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      signal: AbortSignal.timeout(8000),
-    })
+    const r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(8000) })
     if (r.ok) return await r.text()
   } catch {}
 
-  // Fallback: codetabs
-  try {
-    const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(GSE_URL)}`, {
-      signal: AbortSignal.timeout(8000),
-    })
-    if (r.ok) return await r.text()
-  } catch {}
+  // Codetabs fallback (page 1 only — avoid flooding proxy for all pages)
+  if (n === 1) {
+    try {
+      const r = await fetch(
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        { signal: AbortSignal.timeout(8000) }
+      )
+      if (r.ok) return await r.text()
+    } catch {}
 
-  // Fallback: allorigins
-  try {
-    const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(GSE_URL)}`, {
-      signal: AbortSignal.timeout(10000),
-    })
-    if (r.ok) {
-      const j = await r.json()
-      return j.contents || ''
-    }
-  } catch {}
+    // Allorigins fallback
+    try {
+      const r = await fetch(
+        `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        { signal: AbortSignal.timeout(10000) }
+      )
+      if (r.ok) {
+        const j = await r.json()
+        return j.contents || ''
+      }
+    } catch {}
+  }
 
   return ''
 }
 
-function parseHtml(html, filterSymbols) {
+function parsePage(html) {
   const reports = []
-  // Split on each grid item; index 0 is the preamble before the first item
   const blocks = html.split('class="nectar-post-grid-item"')
 
   for (let i = 1; i < blocks.length; i++) {
@@ -51,10 +59,8 @@ function parseHtml(html, filterSymbols) {
     const dateMatch   = block.match(/class="meta-date">([^<]+)<\/span>/)
 
     const ticker = tickerMatch ? tickerMatch[1].trim().toUpperCase() : null
-    const title  = titleMatch  ? titleMatch[1].trim()  : null
+    const title  = titleMatch  ? titleMatch[1].trim() : null
     if (!ticker || !title) continue
-
-    if (filterSymbols.length && !filterSymbols.includes(ticker.toLowerCase())) continue
 
     const rawDate = dateMatch ? dateMatch[1].trim() : null
     let date = null
@@ -83,9 +89,41 @@ export default async function handler(req, res) {
   const filterSymbols = (req.query.symbols || '')
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
 
-  const html = await fetchHtml()
-  if (!html) return res.status(502).json({ error: 'Could not fetch GSE financial statements', reports: [] })
+  // Fetch pages 1–5 in parallel to cover several months of filings
+  const pages = await Promise.all([1, 2, 3, 4, 5].map(fetchPage))
 
-  const reports = parseHtml(html, filterSymbols)
+  // Collect all filings, deduplicate by title
+  const seen  = new Set()
+  const allReports = []
+  for (const html of pages) {
+    if (!html) continue
+    for (const r of parsePage(html)) {
+      if (!seen.has(r.title)) {
+        seen.add(r.title)
+        allReports.push(r)
+      }
+    }
+  }
+
+  if (!allReports.length) {
+    return res.status(502).json({ error: 'Could not fetch GSE financial statements', reports: [] })
+  }
+
+  // Keep only the most recent filing per ticker
+  const byTicker = {}
+  for (const r of allReports) {
+    const prev = byTicker[r.ticker]
+    if (!prev || (r.date && (!prev.date || r.date > prev.date))) {
+      byTicker[r.ticker] = r
+    }
+  }
+
+  // Filter by held symbols, sort newest first
+  let reports = Object.values(byTicker)
+  if (filterSymbols.length) {
+    reports = reports.filter(r => filterSymbols.includes(r.ticker.toLowerCase()))
+  }
+  reports.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+
   res.json({ reports })
 }
