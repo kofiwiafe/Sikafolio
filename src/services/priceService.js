@@ -7,12 +7,18 @@ const CORS_PROXIES = [
 ]
 
 export async function fetchLatestPrices() {
-  // Try our own Vercel proxy first (tries direct + allorigins server-side)
+  // Try our own Vercel proxy first (returns JSON from gse.com.gh or HTML from afx)
   try {
     const res = await fetch('/api/gse')
     if (res.ok) {
-      const html = await res.text()
-      const prices = parseGSETable(html)
+      const text = await res.text()
+      let prices = {}
+      try {
+        const json = JSON.parse(text)
+        if (json.prices && Object.keys(json.prices).length > 0) prices = json.prices
+      } catch {
+        prices = parseGSETable(text)
+      }
       if (Object.keys(prices).length > 0) {
         await persistPrices(prices)
         return prices
@@ -61,14 +67,15 @@ function parseGSETable(html) {
   const doc    = parser.parseFromString(html, 'text/html')
   const prices = {}
 
-  // kwayisi.org table columns: symbol | name | volume | price | change
+  // afx.kwayisi.org main table columns: ticker (link) | name (link) | volume | price | change
   const rows = doc.querySelectorAll('table tbody tr, table tr')
   rows.forEach(row => {
     const cells = [...row.querySelectorAll('td')]
     if (cells.length < 4) return
 
-    const symbol = cells[0]?.textContent?.trim()?.toUpperCase()
-    const name   = cells[1]?.textContent?.trim() || ''
+    const link   = cells[0]?.querySelector('a')
+    const symbol = (link?.textContent ?? cells[0]?.textContent ?? '').trim().toUpperCase()
+    const name   = cells[1]?.textContent?.trim() || link?.getAttribute('title') || ''
     const volume = parseInt(String(cells[2]?.textContent || '').replace(/\D/g, '') || '0', 10)
     const price  = parseNum(cells[3]?.textContent)
     const change = parseNum(cells[4]?.textContent)
