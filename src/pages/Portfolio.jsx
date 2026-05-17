@@ -136,21 +136,21 @@ export default function Portfolio({ prices, user, trades, tradesLoading }) {
             margin: '0 -20px', padding: '8px 20px 10px',
           }}>
             {[
-              { label: 'Invested',    value: `GHS ${fmt(summary?.totalCost || 0)}` },
-              { label: 'Fees paid',   value: `GHS ${fmt(summary?.totalFees || 0)}` },
-              { label: 'Stocks sold', value: `GHS ${fmt(summary?.stocksSold || 0)}` },
-              { label: 'Stocks held', value: `${summary?.positions || 0} stocks` },
-            ].map(({ label, value }, i, arr) => (
+              { label: 'Invested', value: fmt(summary?.totalCost || 0) },
+              { label: 'Fees',     value: fmt(summary?.totalFees || 0) },
+              { label: 'Sold',     value: fmt(summary?.stocksSold || 0) },
+              { label: 'Held',     value: `${summary?.positions || 0} stocks` },
+            ].map(({ label, value }, i) => (
               <div key={label} style={{
-                flex: 1, display: 'flex', flexDirection: 'column', gap: 2,
-                paddingLeft: i > 0 ? 10 : 0,
+                flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2,
+                paddingLeft: i > 0 ? 8 : 0,
                 borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                marginLeft: i > 0 ? 10 : 0,
+                marginLeft: i > 0 ? 8 : 0,
               }}>
-                <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: 'Manrope, system-ui, sans-serif', opacity: 0.7 }}>
+                <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: 'Manrope, system-ui, sans-serif', opacity: 0.7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {label}
                 </div>
-                <div className="mono" style={{ fontSize: 11, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div className="mono" style={{ fontSize: 'clamp(9px, 2.6vw, 11px)', color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {value}
                 </div>
               </div>
